@@ -59,3 +59,9 @@ Tambahkan domain video ke `media-src` / `frame-src` di Content-Security-Policy `
 1. Pakai proyek Supabase yang sama: isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY` di `config.js` persis seperti Ninokuu, lalu jalankan `supabase/schema.sql` di proyek itu. Email dan password yang sama langsung bisa masuk.
 2. Sesi login tersimpan per alamat situs. Bila NinoNime beda domain, pengguna masuk sekali lagi (akun sama).
 3. Bila NinoNime satu alamat situs dengan Ninokuu (subfolder atau subdomain yang berbagi penyimpanan), isi `SESSION_KEY: "ninokuu:session"` di `config.js`. Masuk di salah satu aplikasi berlaku di keduanya. Jangan kirim token lewat URL.
+
+## Tayang dan bangun APK lewat GitHub (tanpa Android Studio)
+
+1. Push proyek ke repo GitHub. Di **Settings → Pages**, pilih Source **GitHub Actions**. Workflow *Deploy PWA* menayangkan web setiap push ke `main`.
+2. Untuk APK: tab **Actions → Build APK → Run workflow**. Hasilnya di **Releases → apk-terbaru → ninonime.apk** (tautan tetap, bisa dibagikan). Build berikutnya otomatis saat berkas `VERSION` diubah.
+3. APK ditandatangani kunci debug: cukup untuk dipasang langsung ke HP. Play Store memerlukan kunci rilis sendiri.

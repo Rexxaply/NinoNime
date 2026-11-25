@@ -1,0 +1,32 @@
+# Menayangkan NinoNime sebagai web/PWA di GitHub Pages setiap ada perubahan di main.
+# Aktifkan dulu: Settings → Pages → Source: "GitHub Actions".
+name: Deploy PWA
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["apk/**", "docs/**", "supabase/**", "README.md"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.dep.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: Siapkan berkas web
+        run: |
+          mkdir -p _site
+          cp -r index.html config.js manifest.webmanifest sw.js css js icons _site/
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: dep
+        uses: actions/deploy-pages@v4

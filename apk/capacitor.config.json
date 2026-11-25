@@ -1,0 +1,9 @@
+{
+  "appId": "com.ninonime.app",
+  "appName": "NinoNime",
+  "webDir": "www",
+  "backgroundColor": "#0B1018",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false, "adjustMarginsForEdgeToEdge": "auto", "backgroundColor": "#0B1018" },
+  "plugins": { "CapacitorHttp": { "enabled": false } }
+}

@@ -1,0 +1,71 @@
+# Membangun APK NinoNime (Capacitor) dari berkas web di repo ini.
+# Jalankan dari tab Actions → "Build APK" → Run workflow, atau otomatis saat berkas VERSION berubah.
+# Hasil: GitHub Release "apk-terbaru" berisi ninonime.apk (tautan tetap, bisa dibagikan):
+#   https://github.com/<pemilik>/<repo>/releases/download/apk-terbaru/ninonime.apk
+# Tanpa secret: config.js hanya berisi kunci publik. APK ditandatangani kunci debug (cukup untuk dipasang
+# langsung). Untuk Play Store, tandatangani dengan kunci rilis sendiri.
+name: Build APK
+on:
+  push:
+    branches: [main]
+    paths: ["VERSION", "apk/**", ".github/workflows/apk.yml"]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: apk
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: apk
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+
+      - name: Berkas web
+        working-directory: .
+        run: |
+          mkdir -p apk/www
+          cp -r index.html config.js manifest.webmanifest sw.js css js icons apk/www/
+          mkdir -p apk/assets
+          cp icons/icon-512.png apk/assets/icon-only.png
+          cp icons/icon-512.png apk/assets/icon-foreground.png
+          cp icons/icon-512.png apk/assets/icon-background.png
+
+      - name: Pasang Capacitor dan proyek Android
+        run: |
+          npm install --no-audit --no-fund
+          npx cap add android
+          npx cap sync android
+
+      - name: Ikon aplikasi (opsional)
+        continue-on-error: true
+        run: npx --yes @capacitor/assets generate --android --iconBackgroundColor '#0B1018' --iconBackgroundColorDark '#0B1018'
+
+      - name: Bangun APK
+        working-directory: apk/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Ganti nama berkas
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ninonime.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ninonime-apk
+          path: apk/ninonime.apk
+
+      - name: Rilis "apk-terbaru"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete apk-terbaru --yes --cleanup-tag 2>/dev/null || true
+          gh release create apk-terbaru ninonime.apk --title "NinoNime APK terbaru" --notes "APK terbaru NinoNime. Izinkan pemasangan dari sumber tidak dikenal lalu buka berkas ini."

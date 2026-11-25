@@ -1,0 +1,11 @@
+{
+  "name": "ninonime-apk",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pembungkus Android (Capacitor) untuk NinoNime. Dibangun oleh workflow Build APK.",
+  "dependencies": {
+    "@capacitor/android": "^7.6.0",
+    "@capacitor/cli": "^7.6.0",
+    "@capacitor/core": "^7.6.0"
+  }
+}
