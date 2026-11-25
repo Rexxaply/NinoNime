@@ -53,3 +53,9 @@ Tambahkan domain video ke `media-src` / `frame-src` di Content-Security-Policy `
 - Favorit dan riwayat tonton disimpan di HP (localStorage).
 - Jam tayang dari Jikan berzona Jepang; diubah ke WIB (−2 jam).
 - Jikan membatasi ±3 permintaan/detik; `js/anime.js` sudah mengantre dan menyimpan cache.
+
+## Satu akun dengan Ninokuu
+
+1. Pakai proyek Supabase yang sama: isi `SUPABASE_URL` dan `SUPABASE_ANON_KEY` di `config.js` persis seperti Ninokuu, lalu jalankan `supabase/schema.sql` di proyek itu. Email dan password yang sama langsung bisa masuk.
+2. Sesi login tersimpan per alamat situs. Bila NinoNime beda domain, pengguna masuk sekali lagi (akun sama).
+3. Bila NinoNime satu alamat situs dengan Ninokuu (subfolder atau subdomain yang berbagi penyimpanan), isi `SESSION_KEY: "ninokuu:session"` di `config.js`. Masuk di salah satu aplikasi berlaku di keduanya. Jangan kirim token lewat URL.

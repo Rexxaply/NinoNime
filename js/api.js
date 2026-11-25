@@ -25,12 +25,20 @@ async function readErr(r) {
 }
 
 /* ---------- sesi login ---------- */
-let session = lsGet("session");
+// Sesi bisa dibagi dengan Ninokuu bila keduanya satu alamat situs (SESSION_KEY: "ninokuu:session").
+// Satu kunci untuk dua aplikasi + dibaca ulang tiap dipakai, supaya refresh token yang berputar tidak basi.
+const SKEY = String(C.SESSION_KEY || "");
+const readSess = () => { if (!SKEY) return lsGet("session"); try { const v = localStorage.getItem(SKEY); return v ? JSON.parse(v) : null; } catch { return null; } };
+const writeSess = (v) => { if (!SKEY) return lsSet("session", v); try { v == null ? localStorage.removeItem(SKEY) : localStorage.setItem(SKEY, JSON.stringify(v)); } catch {} };
+let session = readSess();
+const syncSess = () => { const s = readSess(); if (JSON.stringify(s) !== JSON.stringify(session)) { session = s; listeners.forEach((f) => { try { f(session); } catch {} }); } };
+addEventListener("storage", (e) => { if (!SKEY || e.key === SKEY) syncSess(); });
+addEventListener("focus", syncSess);
 const listeners = new Set();
 export const onAuth = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
 function setSession(s) {
   session = s && s.access_token ? { access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at || Math.floor(Date.now() / 1000) + (s.expires_in || 3600), user: s.user } : null;
-  lsSet("session", session);
+  writeSess(session);
   listeners.forEach((f) => { try { f(session); } catch {} });
 }
 export const currentUser = () => session?.user || null;
@@ -47,6 +55,7 @@ async function authCall(path, body, { method = "POST", token } = {}) {
 }
 let refreshing = null;
 async function accessToken() {
+  syncSess();
   if (!session) return null;
   if (session.expires_at * 1000 - Date.now() > 60e3) return session.access_token;
   refreshing ||= authCall("/token?grant_type=refresh_token", { refresh_token: session.refresh_token })
