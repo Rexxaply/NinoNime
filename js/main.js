@@ -86,7 +86,7 @@ ${user ? `<div class="me-card mx"><span class="me-ini">${esc((user.email || "?")
   });
   if (user) {
     AN.loadAccess().then(redrawKp).catch(() => {});
-    api.rpc("is_admin").then((ok) => { const el = $("#adminRow"); if (ok && el) el.innerHTML = group("Admin", mrow("key", "Keypass & bot WhatsApp", "Buat, salin, dan cabut keypass · kunci bot", "admin")); }).catch(() => {});
+    api.rpc("nn_is_admin").then((ok) => { const el = $("#adminRow"); if (ok && el) el.innerHTML = group("Admin", mrow("key", "Keypass & bot WhatsApp", "Buat, salin, dan cabut keypass · kunci bot", "admin")); }).catch(() => {});
   }
 }
 

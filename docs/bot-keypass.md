@@ -12,7 +12,7 @@ Bot membaca perintah itu, meminta keypass ke Supabase, lalu membalas kodenya. Pe
 ## Kenapa aman tanpa kunci service_role
 
 Bot **tidak** memegang kunci `service_role` dan tidak menulis ke tabel secara langsung. Bot hanya memanggil satu fungsi,
-`bot_keypass`, dengan:
+`nn_bot_keypass`, dengan:
 
 - **kunci publik** Supabase (`anon`, sama seperti yang ada di aplikasi), dan
 - **kunci bot** rahasia (`nkbot_…`) yang dibuat di aplikasi: Akun → Admin → *Keypass & bot WhatsApp* → *Kunci bot WhatsApp*.
@@ -48,7 +48,7 @@ NINOKUU_BOT_KEY=nkbot_...
 ## API
 
 ```
-POST {SUPABASE_URL}/rest/v1/rpc/bot_keypass
+POST {SUPABASE_URL}/rest/v1/rpc/nn_bot_keypass
 apikey: {SUPABASE_ANON_KEY}
 Authorization: Bearer {SUPABASE_ANON_KEY}
 Content-Type: application/json
@@ -72,7 +72,7 @@ Balasan:
 const { SUPABASE_URL, SUPABASE_ANON_KEY, NINOKUU_BOT_KEY } = process.env;
 
 async function mintaKeypass(email, wa) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/bot_keypass`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/nn_bot_keypass`, {
     method: "POST",
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ p_key: NINOKUU_BOT_KEY, p_email: email, p_wa: wa }),
