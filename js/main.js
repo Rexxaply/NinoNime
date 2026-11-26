@@ -49,36 +49,154 @@ function gate() {
 
 /* ---------- halaman masuk / daftar (kartu berbalik) ---------- */
 // Masuk di sisi depan, Daftar di sisi belakang. "Tidak memiliki akun" membalik kartu ke kiri; "Sudah punya akun" membaliknya ke kanan.
-const TERMS = "Ketentuan penggunaan NinoNime\n\n• Aplikasi ini hanya untuk lingkaran pengguna yang diundang pemiliknya.\n• Keypass bersifat pribadi: jangan dibagikan atau dijual.\n• Kami menyimpan email dan data akunmu di server untuk login dan akses. Password disimpan terenkripsi, bukan teks asli.\n• Daftar favorit disimpan di perangkatmu.\n• Pemilik dapat mencabut keypass bila ada penyalahgunaan.";
+// Balik kartu digerakkan pegas (bukan durasi tetap): bisa disentuh ulang di tengah jalan, lalu berbalik dari posisinya saat itu.
+const TERMS = "Ketentuan penggunaan NinoNime\n\n• Aplikasi ini hanya untuk lingkaran pengguna yang diundang pemiliknya.\n• Keypass bersifat pribadi: jangan dibagikan atau dijual.\n• Kami menyimpan email, username, dan data akunmu di server untuk login dan akses. Password disimpan terenkripsi, bukan teks asli.\n• Daftar favorit disimpan di perangkatmu.\n• Pemilik dapat mencabut keypass bila ada penyalahgunaan.";
 let flipUp = false;
+const EMAIL_RE = /^(?!.*\.\.)[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+const validEmail = (v) => v.length <= 254 && !/^[.]|[.]@/.test(v) && EMAIL_RE.test(v);
+const USER_RE = /^[a-z][a-z0-9_.]{2,19}$/;
+const COMMON = /^(password|passw0rd|12345678|123456789|1234567890|qwertyui|qwerty123|iloveyou|abc12345|11111111)/i;
+// kekuatan password: 1 = lemah (merah), 2 = sedang (oranye), 3 = kuat (hijau)
+export function strength(p) {
+  if (p.length < 8 || COMMON.test(p) || /^(.)\1+$/.test(p)) return 1;
+  let sc = 0;
+  if (p.length >= 12) sc++;
+  if (/[a-z]/.test(p) && /[A-Z]/.test(p)) sc++;
+  if (/\d/.test(p)) sc++;
+  if (/[^A-Za-z0-9]/.test(p)) sc++;
+  if (sc >= 3 && p.length >= 10) return 3;
+  return sc >= 1 ? 2 : 1;
+}
+const SLABEL = ["", "Lemah", "Sedang", "Kuat"];
+const pwField = (up) => `<label>Password<span class="pw"><input name="pw" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}" placeholder="Minimal 8 karakter"><button type="button" class="eye" data-act="eye" aria-label="Tampilkan password" aria-pressed="false">${icon("eye", 20)}</button></span></label>`;
+
 function authPage() {
-  const face = (up) => `<form class="auth-face ${up ? "back" : "front"}" data-up="${up ? 1 : 0}">
-      <b class="b17">${up ? "Daftar akun NinoNime" : "Masuk ke NinoNime"}</b>
-      <label>Email<input name="email" type="email" required autocomplete="email" placeholder="nama@email.com"></label>
-      <label>Password<input name="pw" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}" placeholder="Minimal 8 karakter"></label>
-      ${up ? `<label class="agree"><input name="agree" type="checkbox" required><span>Saya menyetujui <a href="#" data-act="terms">Ketentuan &amp; Privasi</a> NinoNime.</span></label>` : ""}
+  const front = `<form class="auth-face front" data-up="0" novalidate>
+      <b class="b17">Masuk ke NinoNime</b>
+      <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
+      ${pwField(false)}
       <span class="err" role="alert"></span>
-      <button class="btn primary" type="submit">${up ? "Daftar" : "Masuk"}</button>
-      <button class="btn ghost" type="button" data-act="flip">${up ? "Sudah punya akun? Masuk" : "Tidak memiliki akun? Daftar"}</button></form>`;
+      <button class="btn primary" type="submit">Masuk</button>
+      <button class="btn ghost" type="button" data-act="flip">Tidak memiliki akun? Daftar</button></form>`;
+  const back = `<form class="auth-face back" data-up="1" novalidate>
+      <b class="b17">Daftar akun NinoNime</b>
+      <label>Username<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="contoh: nino_fan"><span class="hint" data-for="username" aria-live="polite"></span></label>
+      <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"><span class="hint" data-for="email" aria-live="polite"></span></label>
+      ${pwField(true)}
+      <span class="meter" data-s="0" aria-live="polite"><i></i><i></i><i></i><em>Kekuatan password</em></span>
+      <label class="agree"><input name="agree" type="checkbox" required><span>Saya menyetujui <a href="#" data-act="terms">Ketentuan &amp; Privasi</a> NinoNime.</span></label>
+      <span class="err" role="alert"></span>
+      <button class="btn primary" type="submit">Daftar</button>
+      <button class="btn ghost" type="button" data-act="flip">Sudah punya akun? Masuk</button></form>`;
   view.innerHTML = `<div class="auth-page"><img class="gate-logo" src="icons/logo.png" alt="NinoNime" width="207" height="48">
     <p class="mu lh ct">Masuk dulu untuk membuka NinoNime.</p>
-    <div class="flip${flipUp ? " is-up" : ""}" id="flip"><div class="flip-in">${face(false)}${face(true)}</div></div></div><div class="pad-nav"></div>`;
-  const flip = $("#flip");
-  const sync = () => { $$(".auth-face", flip).forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", hide); }); };
-  sync();
-  setActs({
-    flip: () => { flipUp = !flipUp; authMode = flipUp ? "up" : "in"; flip.classList.toggle("is-up", flipUp); sync(); setTimeout(() => $(`.auth-face[data-up="${flipUp ? 1 : 0}"] input`, flip)?.focus({ preventScroll: true }), 650); },
-    terms: (e) => { e?.preventDefault?.(); ask(TERMS, { title: "Ketentuan & Privasi", ok: "Mengerti", cancel: "Tutup" }); },
+    <div class="flip${flipUp ? " is-up" : ""}" id="flip"><div class="flip-in" id="flipIn">${front}${back}<span class="gloss" aria-hidden="true"></span></div></div>
+    <div class="forgot" id="forgot"><button class="link" type="button" data-act="forgot" aria-expanded="false">Lupa password?</button>
+      <form class="fg-box" id="fgBox" hidden novalidate><label>Email akunmu<input name="email" type="email" autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
+        <button class="btn primary" type="submit">Kirim tautan reset</button><span class="fg-msg" role="status"></span></form></div></div><div class="pad-nav"></div>`;
+  const flip = $("#flip"), inner = $("#flipIn"), gloss = $(".gloss", flip), forgot = $("#forgot");
+  const faces = $$(".auth-face", flip), faceOf = (up) => faces.find((f) => (f.dataset.up === "1") === up);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* pegas untuk sudut balik: mulai dari nilai saat ini, bisa dibalik di tengah jalan, tanpa kunci input */
+  let ang = flipUp ? -180 : 0, vel = 0, tgt = ang, raf = 0, last = 0;
+  const draw = () => {
+    const dip = Math.sin(Math.min(1, Math.abs(ang) / 180) * Math.PI);          // 0 di ujung, 1 di tengah balikan
+    inner.style.transform = `translateZ(${-70 * dip}px) rotateY(${ang}deg) scale(${1 - 0.035 * dip})`;
+    gloss.style.opacity = String(dip * 0.55);
+    flip.style.setProperty("--lift", String(dip));
+  };
+  const step = (t) => {
+    const dt = Math.min(0.032, (t - last) / 1000); last = t;
+    const w = (2 * Math.PI) / 0.58, z = 0.9;                                   // response 0,58 dtk, sedikit memantul
+    vel += (-w * w * (ang - tgt) - 2 * z * w * vel) * dt; ang += vel * dt; draw();
+    if (Math.abs(ang - tgt) < 0.04 && Math.abs(vel) < 0.6) { ang = tgt; vel = 0; draw(); raf = 0; return; }
+    raf = requestAnimationFrame(step);
+  };
+  const go2 = (up) => { tgt = up ? -180 : 0; if (reduce) { ang = tgt; vel = 0; draw(); return; } if (!raf) { last = performance.now(); raf = requestAnimationFrame(step); } };
+  draw();
+
+  /* tinggi kartu mengikuti sisi yang tampil */
+  const fit = () => { flip.style.height = faceOf(flipUp).offsetHeight + "px"; };
+  const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; faces.forEach((f) => ro?.observe(f));
+  const sync = () => { faces.forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", String(hide)); }); forgot.classList.toggle("off", flipUp); fit(); };
+  sync(); requestAnimationFrame(fit);
+
+  /* tampil/sembunyi password */
+  const eye = (btn) => { const inp = btn.parentElement.querySelector("input"), on = inp.type === "password"; inp.type = on ? "text" : "password"; btn.setAttribute("aria-pressed", String(on)); btn.setAttribute("aria-label", on ? "Sembunyikan password" : "Tampilkan password"); };
+
+  /* validasi langsung di form daftar */
+  const bf = faceOf(true), q = (n) => bf.elements[n], hint = (n) => $(`.hint[data-for="${n}"]`, bf);
+  const setHint = (n, txt, kind) => { const h = hint(n); h.textContent = txt; h.dataset.k = kind || ""; };
+  let uOk = null, uTimer = 0, uSeq = 0;
+  const checkUser = () => {
+    const v = q("username").value.trim().toLowerCase(); clearTimeout(uTimer); uOk = null; const my = ++uSeq;
+    if (!v) { setHint("username", "", ""); return; }
+    if (!USER_RE.test(v)) { setHint("username", "3–20 karakter: huruf kecil, angka, titik, garis bawah; diawali huruf.", "bad"); uOk = false; return; }
+    setHint("username", "Memeriksa…", "wait");
+    uTimer = setTimeout(async () => {
+      try { const r = await api.rpc("nn_username_free", { p_username: v }); if (my !== uSeq) return;
+        uOk = !!r?.free; setHint("username", uOk ? "Username tersedia" : (r?.error || "Username sudah dipakai"), uOk ? "ok" : "bad");
+      } catch { if (my === uSeq) { uOk = null; setHint("username", "Tidak bisa memeriksa sekarang. Dicek lagi saat mendaftar.", "wait"); } }
+    }, 450);
+  };
+  const checkMail = (final) => {
+    const v = q("email").value.trim();
+    if (!v) { setHint("email", "", ""); return false; }
+    const ok = validEmail(v);
+    setHint("email", ok ? (final ? "Format email benar" : "") : (final ? "Format email belum benar. Contoh: nama@email.com" : ""), ok ? "ok" : "bad");
+    return ok;
+  };
+  const meter = $(".meter", bf);
+  const checkPw = () => { const p = q("pw").value, s = p ? strength(p) : 0; meter.dataset.s = String(s); $("em", meter).textContent = s ? `Password ${SLABEL[s].toLowerCase()}${s === 1 && p.length < 8 ? " (minimal 8 karakter)" : ""}` : "Kekuatan password"; return s; };
+  q("username").addEventListener("input", checkUser);
+  q("email").addEventListener("input", () => checkMail(false)); q("email").addEventListener("blur", () => checkMail(true));
+  q("pw").addEventListener("input", checkPw);
+
+  /* lupa password */
+  const fg = $("#fgBox"), fgMsg = $(".fg-msg", fg);
+  fg.addEventListener("submit", async (e) => {
+    e.preventDefault(); const em = fg.elements.email.value.trim(), btn = fg.querySelector("button");
+    if (!validEmail(em)) { fgMsg.dataset.k = "bad"; fgMsg.textContent = "Isi email yang formatnya benar."; return; }
+    btn.disabled = true; fgMsg.dataset.k = ""; fgMsg.textContent = "Mengirim…";
+    try { await api.recover(em); fgMsg.dataset.k = "ok"; fgMsg.textContent = "Jika email itu terdaftar, tautan reset sudah dikirim. Cek kotak masuk dan folder spam."; }
+    catch (ex) { fgMsg.dataset.k = "bad"; fgMsg.textContent = ex.message; }
+    setTimeout(() => { btn.disabled = false; }, 30000);
   });
-  $$(".auth-face", flip).forEach((form) => form.addEventListener("submit", async (e) => {
+
+  setActs({
+    eye: (el) => eye(el),
+    flip: () => { flipUp = !flipUp; authMode = flipUp ? "up" : "in"; flip.classList.toggle("is-up", flipUp); sync(); go2(flipUp); },
+    terms: (_el, e) => { e?.preventDefault?.(); ask(TERMS, { title: "Ketentuan & Privasi", ok: "Mengerti", cancel: "Tutup" }); },
+    forgot: (el) => {
+      const open = fg.hidden; fg.hidden = !open; el.setAttribute("aria-expanded", String(open));
+      if (open) { const m = faceOf(false).elements.email.value.trim(); if (m && !fg.elements.email.value) fg.elements.email.value = m; fg.elements.email.focus({ preventScroll: true }); }
+    },
+  });
+
+  faces.forEach((form) => form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const up = form.dataset.up === "1", f = new FormData(form), btn = form.querySelector("button[type=submit]"), err = form.querySelector(".err");
+    const email = String(f.get("email") || "").trim(), pw = String(f.get("pw") || ""), fail = (m, el) => { err.textContent = m; el?.focus({ preventScroll: true }); };
     err.textContent = "";
-    if (up && !f.get("agree")) { err.textContent = "Centang persetujuan ketentuan dulu."; return; }
+    if (!validEmail(email)) { if (up) checkMail(true); return fail("Format email belum benar. Contoh: nama@email.com", form.elements.email); }
+    if (pw.length < 8) return fail("Password minimal 8 karakter.", form.elements.pw);
+    let username = "";
+    if (up) {
+      username = String(f.get("username") || "").trim().toLowerCase();
+      if (!USER_RE.test(username)) return fail("Username belum benar: 3–20 karakter, huruf kecil/angka/titik/garis bawah, diawali huruf.", form.elements.username);
+      if (uOk === false) return fail("Username sudah dipakai atau tidak valid.", form.elements.username);
+      if (!f.get("agree")) return fail("Centang persetujuan ketentuan dulu.");
+    }
     btn.disabled = true;
     try {
-      if (up) { const r = await api.signUp(f.get("email"), f.get("pw")); if (r.confirm) { toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500); flipUp = false; authMode = "in"; authPage(); return; } }
-      else await api.signIn(f.get("email"), f.get("pw"));
+      if (up) {
+        const rv = await api.rpc("nn_reserve_username", { p_username: username, p_email: email.toLowerCase() });
+        if (!rv?.ok) { uOk = false; setHint("username", rv?.error || "Username sudah dipakai", "bad"); throw new Error(rv?.error || "Username sudah dipakai. Coba yang lain."); }
+        const r = await api.signUp(email, pw, username);
+        if (r.confirm) { toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500); flipUp = false; authMode = "in"; authPage(); return; }
+      } else await api.signIn(email, pw);
+      api.rpc("nn_claim_username").then((r) => { if (r?.username) api.lsSet("username", r.username); }).catch(() => {});
       await AN.loadAccess().catch(() => {});
       toast("Berhasil masuk");
       if (!AN.hasAccess() && (await AN.openKeypass())) { go("#/home"); return; }
@@ -94,7 +212,7 @@ async function vAkun() {
   if (!user) { authPage(); return; }
   view.innerHTML = `<div class="page-h"><h1>Akun</h1></div>
 ${!api.configured ? `<p class="note-warn mx">${icon("info", 18)}Isi SUPABASE_URL dan SUPABASE_ANON_KEY di config.js.</p>` : ""}
-${user ? `<div class="me-card mx"><span class="me-ini">${esc((user.email || "?")[0].toUpperCase())}</span><span class="rc-mid"><b>${esc(user.email || "")}</b><span class="mu sm">${AN.hasAccess() ? "Keypass aktif" : "Belum ada keypass"}</span></span></div>
+${user ? `<div class="me-card mx"><span class="me-ini">${esc((user.email || "?")[0].toUpperCase())}</span><span class="rc-mid"><b>${esc(api.lsGet("username") ? "@" + api.lsGet("username") : user.email || "")}</b><span class="mu sm">${api.lsGet("username") ? esc(user.email || "") + " · " : ""}${AN.hasAccess() ? "Keypass aktif" : "Belum ada keypass"}</span></span></div>
   <div class="px"><div id="kpSec">${AN.keypassSection()}</div></div>
   <div id="adminRow"></div>
   ${group("Aplikasi", mrow("info", "Tentang NinoNime", "Versi " + esc(VERSION), "about") + mrow("out", "Keluar", "", "logout", true))}`
@@ -105,9 +223,10 @@ ${user ? `<div class="me-card mx"><span class="me-ini">${esc((user.email || "?")
     ...AN.keypassActs(redrawKp),
     about: () => toast(`NinoNime v${VERSION}`),
     admin: () => go("#/admin"),
-    logout: async () => { if (!(await ask("Keluar dari akun?", { ok: "Keluar", danger: true }))) return; AN.player.close(); await api.signOut(); toast("Kamu sudah keluar"); vAkun(); },
+    logout: async () => { if (!(await ask("Keluar dari akun?", { ok: "Keluar", danger: true }))) return; AN.player.close(); await api.signOut(); api.lsSet("username", null); toast("Kamu sudah keluar"); vAkun(); },
   });
   if (user) {
+    if (!api.lsGet("username")) api.rpc("nn_claim_username").then((r) => { if (r?.username) { api.lsSet("username", r.username); vAkun(); } }).catch(() => {});
     AN.loadAccess().then(redrawKp).catch(() => {});
     api.rpc("nn_is_admin").then((ok) => { const el = $("#adminRow"); if (ok && el) el.innerHTML = group("Admin", mrow("key", "Keypass & bot WhatsApp", "Buat, salin, dan cabut keypass · kunci bot", "admin")); }).catch(() => {});
   }

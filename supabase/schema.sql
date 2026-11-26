@@ -261,6 +261,94 @@ revoke all on function public.nn_revoke_bot_key(bigint) from public, anon;
 grant execute on function public.nn_revoke_bot_key(bigint) to authenticated;
 
 -- =====================================================================
+-- Username NinoNime: unik (tanpa membedakan huruf besar/kecil), dicek sebelum daftar.
+-- Saat daftar, username dipesan 7 hari (nn_reserve_username) karena akun baru belum login sebelum email dikonfirmasi.
+-- Setelah pengguna masuk, username diikat ke akunnya (nn_claim_username) — hanya bila email akunnya sama dengan email pemesan.
+-- Tabel baru, tidak menyentuh tabel Ninokuu. Pemakaian bersama dengan Ninokuu: akun sama, username khusus NinoNime.
+-- =====================================================================
+create table if not exists public.nn_profiles (
+  id bigint generated always as identity primary key,
+  username text not null,
+  reserved_email text,
+  reserved_until timestamptz,
+  user_id uuid unique references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  constraint nn_profiles_fmt check (username ~ '^[a-z][a-z0-9_.]{2,19}$')
+);
+create unique index if not exists nn_profiles_username_idx on public.nn_profiles (lower(username));
+create index if not exists nn_profiles_email_idx on public.nn_profiles (lower(reserved_email)) where user_id is null;
+alter table public.nn_profiles enable row level security;
+revoke all on table public.nn_profiles from anon, authenticated;
+
+-- cek username: { ok, free, error? } (boleh dipanggil sebelum login)
+create or replace function public.nn_username_free(p_username text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare u text := lower(trim(coalesce(p_username, '')));
+begin
+  if u !~ '^[a-z][a-z0-9_.]{2,19}$' then
+    return json_build_object('ok', false, 'free', false, 'error', 'Username 3–20 karakter: huruf kecil, angka, titik, atau garis bawah; diawali huruf.');
+  end if;
+  return json_build_object('ok', true, 'free', not exists (
+    select 1 from public.nn_profiles p where lower(p.username) = u and (p.user_id is not null or p.reserved_until > now())));
+end;
+$$;
+revoke all on function public.nn_username_free(text) from public;
+grant execute on function public.nn_username_free(text) to anon, authenticated;
+
+-- pesan username saat daftar (atomik: yang tercepat dapat)
+create or replace function public.nn_reserve_username(p_username text, p_email text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare u text := lower(trim(coalesce(p_username, ''))); e text := lower(trim(coalesce(p_email, '')));
+begin
+  if u !~ '^[a-z][a-z0-9_.]{2,19}$' then return json_build_object('ok', false, 'error', 'Format username tidak valid.'); end if;
+  if e !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then return json_build_object('ok', false, 'error', 'Format email tidak valid.'); end if;
+  if (select count(*) from public.nn_profiles where user_id is null and reserved_until > now()) > 3000 then
+    return json_build_object('ok', false, 'error', 'Server sedang ramai. Coba lagi nanti.');
+  end if;
+  delete from public.nn_profiles where user_id is null and (reserved_until <= now() or lower(reserved_email) = e);
+  begin
+    insert into public.nn_profiles (username, reserved_email, reserved_until) values (u, e, now() + interval '7 days');
+  exception when unique_violation then
+    return json_build_object('ok', false, 'error', 'Username sudah dipakai. Coba yang lain.');
+  end;
+  return json_build_object('ok', true, 'username', u);
+end;
+$$;
+revoke all on function public.nn_reserve_username(text, text) from public;
+grant execute on function public.nn_reserve_username(text, text) to anon, authenticated;
+
+-- ikat username ke akun yang sedang login (dipanggil setelah masuk) → { ok, username? }
+create or replace function public.nn_claim_username()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare uid uuid := auth.uid(); em text; u text;
+begin
+  if uid is null then return json_build_object('ok', false); end if;
+  select username into u from public.nn_profiles where user_id = uid;
+  if u is not null then return json_build_object('ok', true, 'username', u); end if;
+  select lower(x.email) into em from auth.users x where x.id = uid;
+  update public.nn_profiles set user_id = uid, reserved_until = null
+    where id = (select id from public.nn_profiles where user_id is null and lower(reserved_email) = em and reserved_until > now() order by created_at desc limit 1)
+    returning username into u;
+  if u is null then return json_build_object('ok', false); end if;
+  return json_build_object('ok', true, 'username', u);
+end;
+$$;
+revoke all on function public.nn_claim_username() from public, anon;
+grant execute on function public.nn_claim_username() to authenticated;
+
+-- =====================================================================
 -- Kode aktivasi: dibuat aplikasi untuk pengguna yang sedang login, dikirim lewat pesan WhatsApp.
 -- Bot hanya membuat keypass bila kode aktivasi cocok dengan email di pesan, belum dipakai, dan belum kedaluwarsa (30 menit).
 -- Satu kode hanya bisa dipakai 1x, dan terkunci ke email serta nomor pengirim yang memakainya.
@@ -378,6 +466,6 @@ $$;
 revoke all on function public.nn_bot_keypass(text, text, text, text) from public;
 grant execute on function public.nn_bot_keypass(text, text, text, text) to anon, authenticated;
 
-grant all on public.nn_keypass, public.nn_keypass_tries, public.nn_bot_keys, public.nn_admins, public.nn_activation to service_role;
+grant all on public.nn_keypass, public.nn_keypass_tries, public.nn_bot_keys, public.nn_admins, public.nn_activation, public.nn_profiles to service_role;
 
 commit;

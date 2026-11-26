@@ -65,3 +65,8 @@ Tambahkan domain video ke `media-src` / `frame-src` di Content-Security-Policy `
 1. Push proyek ke repo GitHub. Di **Settings → Pages**, pilih Source **GitHub Actions**. Workflow *Deploy PWA* menayangkan web setiap push ke `main`.
 2. Untuk APK: tab **Actions → Build APK → Run workflow**. Hasilnya di **Releases → apk-terbaru → ninonime.apk** (tautan tetap, bisa dibagikan). Build berikutnya otomatis saat berkas `VERSION` diubah.
 3. APK ditandatangani kunci debug: cukup untuk dipasang langsung ke HP. Play Store memerlukan kunci rilis sendiri.
+
+## Username, lupa password, dan indikator password
+
+- Daftar memakai **username unik** (3–20 karakter; huruf kecil, angka, titik, garis bawah; diawali huruf). Dicek langsung lewat `nn_username_free`, dipesan saat daftar (`nn_reserve_username`), dan diikat ke akun saat pertama masuk (`nn_claim_username`). Tabelnya `nn_profiles`, tidak menyentuh tabel Ninokuu.
+- **Lupa password?** mengirim tautan reset ke halaman `RESET_URL` di `config.js` (default: halaman reset Ninokuu, karena akunnya satu). Alamat itu harus ada di Supabase → Auth → URL Configuration → Redirect URLs.
