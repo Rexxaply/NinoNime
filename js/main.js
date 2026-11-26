@@ -128,7 +128,7 @@ function authPage() {
   /* tinggi alami tiap sisi (isi + padding + border); kartu berubah tinggi bersama sudut balikan */
   const nat = (f) => $(".fc", f).offsetHeight + 42;
   const hStep = (t) => {
-    const dt = Math.min(0.032, (t - hLast) / 1000); hLast = t; const w = (2 * Math.PI) / 0.42;
+    const dt = Math.min(0.032, (t - hLast) / 1000); hLast = t; const w = (2 * Math.PI) / 0.32;
     hFv += (-w * w * (hF - hFt) - 2 * w * hFv) * dt; hF += hFv * dt; draw();
     if (Math.abs(hF - hFt) < 0.3 && Math.abs(hFv) < 2) { hF = hFt; hFv = 0; draw(); hRaf = 0; return; }
     hRaf = requestAnimationFrame(hStep);
@@ -178,13 +178,12 @@ function authPage() {
   const setFg = (on) => {
     if (on === fgMode) return; fgMode = on;
     const cur = on ? pLogin : pForgot, nxt = on ? pForgot : pLogin;
-    cur.classList.add("out"); forgot.classList.toggle("off", flipUp || on);
-    setTimeout(() => {
-      cur.hidden = true; cur.classList.remove("out"); nxt.hidden = false; nxt.classList.add("out");
-      if (on) { const m = faceOf(false).elements.email.value.trim(); if (m && !fEmail.value) fEmail.value = m; fgMsg.textContent = FG_HINT; fgMsg.dataset.k = ""; }
-      fit();
-      requestAnimationFrame(() => { nxt.classList.remove("out"); (on ? fEmail : faceOf(false).elements.email).focus({ preventScroll: true }); });
-    }, reduce ? 0 : 130);
+    forgot.classList.toggle("off", flipUp || on);
+    cur.hidden = true; nxt.hidden = false;                       // tukar isi seketika: tinggi kartu mulai berpegas di frame yang sama
+    if (on) { const m = faceOf(false).elements.email.value.trim(); if (m && !fEmail.value) fEmail.value = m; fgMsg.textContent = FG_HINT; fgMsg.dataset.k = ""; }
+    if (!reduce) { nxt.classList.add("in"); nxt.getBoundingClientRect(); nxt.classList.remove("in"); }   // isi baru muncul dari transparan + sedikit bergeser
+    fit();
+    (on ? fEmail : faceOf(false).elements.email).focus({ preventScroll: true });
   };
   const sendReset = async (form) => {
     const em = fEmail.value.trim(), btn = form.querySelector(".p-forgot button[type=submit]");

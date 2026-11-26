@@ -55,9 +55,11 @@
 .auth-face .btn:active, .forgot { width: 100%; max-width: 420px; margin-top: 14px; text-align: center; transition: opacity .25s, transform .35s cubic-bezier(.23, 1, .32, 1); }
 .forgot.off { opacity: 0; transform: translateY(-6px); pointer-events: none; }
 .link { background: none; border: 0; color: var(--gold); font-size: 13.5px; font-weight: 600; padding: 8px 12px; border-radius: 10px; }
-.pane { display: flex; flex-direction: column; gap: 12px; transition: opacity .13s ease-out; }
+.pane { display: flex; flex-direction: column; gap: 12px; transition: opacity .2s ease-out, transform .3s cubic-bezier(.23, 1, .32, 1); }
 .pane[hidden] { display: none; }
-.pane.out { opacity: 0; }
+.pane.in { opacity: 0; transform: translateY(8px); }
+.link { transition: transform .1s ease-out, opacity .15s; }
+.link:active { transform: scale(.96); opacity: .7; }
 .p-forgot p { margin: 0; }
 .fg-msg { min-height: 16px; font-size: 12.5px; line-height: 1.4; color: var(--mu); }
 .fg-msg[data-k="ok"] { color: #34d399; } .fg-msg[data-k="bad"] { color: #ff7a7a; }
