@@ -71,14 +71,14 @@ const SLABEL = ["", "Lemah", "Sedang", "Kuat"];
 const pwField = (up) => `<label>Password<span class="pw"><input name="pw" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}" placeholder="Minimal 8 karakter"><button type="button" class="eye" data-act="eye" aria-label="Tampilkan password" aria-pressed="false">${icon("eye", 20)}</button></span></label>`;
 
 function authPage() {
-  const front = `<form class="auth-face front" data-up="0" novalidate>
+  const front = `<form class="auth-face front" data-up="0" novalidate><div class="fc">
       <b class="b17">Masuk ke NinoNime</b>
       <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
       ${pwField(false)}
       <span class="err" role="alert"></span>
       <button class="btn primary" type="submit">Masuk</button>
-      <button class="btn ghost" type="button" data-act="flip">Tidak memiliki akun? Daftar</button></form>`;
-  const back = `<form class="auth-face back" data-up="1" novalidate>
+      <button class="btn ghost" type="button" data-act="flip">Tidak memiliki akun? Daftar</button></div></form>`;
+  const back = `<form class="auth-face back" data-up="1" novalidate><div class="fc">
       <b class="b17">Daftar akun NinoNime</b>
       <label>Username<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="contoh: nino_fan"><span class="hint" data-for="username" aria-live="polite"></span></label>
       <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"><span class="hint" data-for="email" aria-live="polite"></span></label>
@@ -87,20 +87,22 @@ function authPage() {
       <label class="agree"><input name="agree" type="checkbox" required><span>Saya menyetujui <a href="#" data-act="terms">Ketentuan &amp; Privasi</a> NinoNime.</span></label>
       <span class="err" role="alert"></span>
       <button class="btn primary" type="submit">Daftar</button>
-      <button class="btn ghost" type="button" data-act="flip">Sudah punya akun? Masuk</button></form>`;
+      <button class="btn ghost" type="button" data-act="flip">Sudah punya akun? Masuk</button></div></form>`;
   view.innerHTML = `<div class="auth-page"><img class="gate-logo" src="icons/logo.png" alt="NinoNime" width="207" height="48">
     <p class="mu lh ct">Masuk dulu untuk membuka NinoNime.</p>
     <div class="flip${flipUp ? " is-up" : ""}" id="flip"><div class="flip-in" id="flipIn">${front}${back}<span class="gloss" aria-hidden="true"></span></div></div>
     <div class="forgot" id="forgot"><button class="link" type="button" data-act="forgot" aria-expanded="false">Lupa password?</button>
       <form class="fg-box" id="fgBox" hidden novalidate><label>Email akunmu<input name="email" type="email" autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
         <button class="btn primary" type="submit">Kirim tautan reset</button><span class="fg-msg" role="status"></span></form></div></div><div class="pad-nav"></div>`;
-  const flip = $("#flip"), inner = $("#flipIn"), gloss = $(".gloss", flip), forgot = $("#forgot");
+  const flip = $("#flip"), inner = $("#flipIn"), gloss = $(".gloss", flip), forgot = $("#forgot"), fg = $("#fgBox");
   const faces = $$(".auth-face", flip), faceOf = (up) => faces.find((f) => (f.dataset.up === "1") === up);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* pegas untuk sudut balik: mulai dari nilai saat ini, bisa dibalik di tengah jalan, tanpa kunci input */
   let ang = flipUp ? -180 : 0, vel = 0, tgt = ang, raf = 0, last = 0;
+  let hF = 0, hB = 0;
   const draw = () => {
+    if (hF && hB) flip.style.height = hF + (hB - hF) * Math.min(1, Math.abs(ang) / 180) + "px";
     const dip = Math.sin(Math.min(1, Math.abs(ang) / 180) * Math.PI);          // 0 di ujung, 1 di tengah balikan
     inner.style.transform = `translateZ(${-70 * dip}px) rotateY(${ang}deg) scale(${1 - 0.035 * dip})`;
     gloss.style.opacity = String(dip * 0.55);
@@ -116,10 +118,11 @@ function authPage() {
   const go2 = (up) => { tgt = up ? -180 : 0; if (reduce) { ang = tgt; vel = 0; draw(); return; } if (!raf) { last = performance.now(); raf = requestAnimationFrame(step); } };
   draw();
 
-  /* tinggi kartu mengikuti sisi yang tampil */
-  const fit = () => { flip.style.height = faceOf(flipUp).offsetHeight + "px"; };
-  const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; faces.forEach((f) => ro?.observe(f));
-  const sync = () => { faces.forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", String(hide)); }); forgot.classList.toggle("off", flipUp); fit(); };
+  /* tinggi alami tiap sisi (isi + padding + border); kartu berubah tinggi bersama sudut balikan */
+  const nat = (f) => $(".fc", f).offsetHeight + 42;
+  const fit = () => { hF = nat(faceOf(false)); hB = nat(faceOf(true)); draw(); };
+  const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; faces.forEach((f) => ro?.observe($(".fc", f)));
+  const sync = () => { faces.forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", String(hide)); }); forgot.classList.toggle("off", flipUp); if (flipUp) { fg.hidden = true; $(".link", forgot).setAttribute("aria-expanded", "false"); } };
   sync(); requestAnimationFrame(fit);
 
   /* tampil/sembunyi password */
@@ -154,7 +157,7 @@ function authPage() {
   q("pw").addEventListener("input", checkPw);
 
   /* lupa password */
-  const fg = $("#fgBox"), fgMsg = $(".fg-msg", fg);
+  const fgMsg = $(".fg-msg", fg);
   fg.addEventListener("submit", async (e) => {
     e.preventDefault(); const em = fg.elements.email.value.trim(), btn = fg.querySelector("button");
     if (!validEmail(em)) { fgMsg.dataset.k = "bad"; fgMsg.textContent = "Isi email yang formatnya benar."; return; }
