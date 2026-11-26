@@ -52,6 +52,7 @@ function gate() {
 // Balik kartu digerakkan pegas (bukan durasi tetap): bisa disentuh ulang di tengah jalan, lalu berbalik dari posisinya saat itu.
 const TERMS = "Ketentuan penggunaan NinoNime\n\n• Aplikasi ini hanya untuk lingkaran pengguna yang diundang pemiliknya.\n• Keypass bersifat pribadi: jangan dibagikan atau dijual.\n• Kami menyimpan email, username, dan data akunmu di server untuk login dan akses. Password disimpan terenkripsi, bukan teks asli.\n• Daftar favorit disimpan di perangkatmu.\n• Pemilik dapat mencabut keypass bila ada penyalahgunaan.";
 let flipUp = false;
+const FG_HINT = "Kami kirim tautan untuk membuat password baru.";
 const EMAIL_RE = /^(?!.*\.\.)[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
 const validEmail = (v) => v.length <= 254 && !/^[.]|[.]@/.test(v) && EMAIL_RE.test(v);
 const USER_RE = /^[a-z][a-z0-9_.]{2,19}$/;
@@ -72,12 +73,19 @@ const pwField = (up) => `<label>Password<span class="pw"><input name="pw" type="
 
 function authPage() {
   const front = `<form class="auth-face front" data-up="0" novalidate><div class="fc">
-      <b class="b17">Masuk ke NinoNime</b>
-      <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
-      ${pwField(false)}
-      <span class="err" role="alert"></span>
-      <button class="btn primary" type="submit">Masuk</button>
-      <button class="btn ghost" type="button" data-act="flip">Tidak memiliki akun? Daftar</button></div></form>`;
+      <div class="pane p-login">
+        <b class="b17">Masuk ke NinoNime</b>
+        <label>Email<input name="email" type="email" required autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
+        ${pwField(false)}
+        <span class="err" role="alert"></span>
+        <button class="btn primary" type="submit">Masuk</button>
+        <button class="btn ghost" type="button" data-act="flip">Tidak memiliki akun? Daftar</button></div>
+      <div class="pane p-forgot" hidden>
+        <b class="b17">Lupa password?</b>
+        <label>Email<input name="femail" type="email" autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
+        <span class="fg-msg" role="status">Kami kirim tautan untuk membuat password baru.</span>
+        <button class="btn primary" type="submit">Kirim tautan reset</button>
+        <button class="btn ghost" type="button" data-act="fgback">Kembali ke Masuk</button></div></div></form>`;
   const back = `<form class="auth-face back" data-up="1" novalidate><div class="fc">
       <b class="b17">Daftar akun NinoNime</b>
       <label>Username<input name="username" required autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" placeholder="contoh: nino_fan"><span class="hint" data-for="username" aria-live="polite"></span></label>
@@ -91,16 +99,15 @@ function authPage() {
   view.innerHTML = `<div class="auth-page"><img class="gate-logo" src="icons/logo.png" alt="NinoNime" width="207" height="48">
     <p class="mu lh ct">Masuk dulu untuk membuka NinoNime.</p>
     <div class="flip${flipUp ? " is-up" : ""}" id="flip"><div class="flip-in" id="flipIn">${front}${back}<span class="gloss" aria-hidden="true"></span></div></div>
-    <div class="forgot" id="forgot"><button class="link" type="button" data-act="forgot" aria-expanded="false">Lupa password?</button>
-      <form class="fg-box" id="fgBox" hidden novalidate><label>Email akunmu<input name="email" type="email" autocomplete="email" inputmode="email" placeholder="nama@email.com"></label>
-        <button class="btn primary" type="submit">Kirim tautan reset</button><span class="fg-msg" role="status"></span></form></div></div><div class="pad-nav"></div>`;
-  const flip = $("#flip"), inner = $("#flipIn"), gloss = $(".gloss", flip), forgot = $("#forgot"), fg = $("#fgBox");
+    <div class="forgot" id="forgot"><button class="link" type="button" data-act="forgot">Lupa password?</button></div></div><div class="pad-nav"></div>`;
+  const flip = $("#flip"), inner = $("#flipIn"), gloss = $(".gloss", flip), forgot = $("#forgot");
   const faces = $$(".auth-face", flip), faceOf = (up) => faces.find((f) => (f.dataset.up === "1") === up);
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let fgMode = false;
 
   /* pegas untuk sudut balik: mulai dari nilai saat ini, bisa dibalik di tengah jalan, tanpa kunci input */
   let ang = flipUp ? -180 : 0, vel = 0, tgt = ang, raf = 0, last = 0;
-  let hF = 0, hB = 0;
+  let hF = 0, hFt = 0, hFv = 0, hB = 0, hRaf = 0, hLast = 0;   // hF: tinggi sisi depan yang sedang tampil (berpegas ke hFt)
   const draw = () => {
     if (hF && hB) flip.style.height = hF + (hB - hF) * Math.min(1, Math.abs(ang) / 180) + "px";
     const dip = Math.sin(Math.min(1, Math.abs(ang) / 180) * Math.PI);          // 0 di ujung, 1 di tengah balikan
@@ -120,9 +127,19 @@ function authPage() {
 
   /* tinggi alami tiap sisi (isi + padding + border); kartu berubah tinggi bersama sudut balikan */
   const nat = (f) => $(".fc", f).offsetHeight + 42;
-  const fit = () => { hF = nat(faceOf(false)); hB = nat(faceOf(true)); draw(); };
+  const hStep = (t) => {
+    const dt = Math.min(0.032, (t - hLast) / 1000); hLast = t; const w = (2 * Math.PI) / 0.42;
+    hFv += (-w * w * (hF - hFt) - 2 * w * hFv) * dt; hF += hFv * dt; draw();
+    if (Math.abs(hF - hFt) < 0.3 && Math.abs(hFv) < 2) { hF = hFt; hFv = 0; draw(); hRaf = 0; return; }
+    hRaf = requestAnimationFrame(hStep);
+  };
+  const fit = () => {
+    hFt = nat(faceOf(false)); hB = nat(faceOf(true));
+    if (!hF || reduce) { hF = hFt; draw(); return; }
+    if (!hRaf) { hLast = performance.now(); hRaf = requestAnimationFrame(hStep); }
+  };
   const ro = "ResizeObserver" in window ? new ResizeObserver(fit) : null; faces.forEach((f) => ro?.observe($(".fc", f)));
-  const sync = () => { faces.forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", String(hide)); }); forgot.classList.toggle("off", flipUp); if (flipUp) { fg.hidden = true; $(".link", forgot).setAttribute("aria-expanded", "false"); } };
+  const sync = () => { faces.forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", String(hide)); }); forgot.classList.toggle("off", flipUp || fgMode); };
   sync(); requestAnimationFrame(fit);
 
   /* tampil/sembunyi password */
@@ -156,30 +173,40 @@ function authPage() {
   q("email").addEventListener("input", () => checkMail(false)); q("email").addEventListener("blur", () => checkMail(true));
   q("pw").addEventListener("input", checkPw);
 
-  /* lupa password */
-  const fgMsg = $(".fg-msg", fg);
-  fg.addEventListener("submit", async (e) => {
-    e.preventDefault(); const em = fg.elements.email.value.trim(), btn = fg.querySelector("button");
+  /* lupa password: kartu Masuk berubah isi di tempat dan mengecil mengikuti kolomnya */
+  const pLogin = $(".p-login", flip), pForgot = $(".p-forgot", flip), fgMsg = $(".fg-msg", flip), fEmail = faceOf(false).elements.femail;
+  const setFg = (on) => {
+    if (on === fgMode) return; fgMode = on;
+    const cur = on ? pLogin : pForgot, nxt = on ? pForgot : pLogin;
+    cur.classList.add("out"); forgot.classList.toggle("off", flipUp || on);
+    setTimeout(() => {
+      cur.hidden = true; cur.classList.remove("out"); nxt.hidden = false; nxt.classList.add("out");
+      if (on) { const m = faceOf(false).elements.email.value.trim(); if (m && !fEmail.value) fEmail.value = m; fgMsg.textContent = FG_HINT; fgMsg.dataset.k = ""; }
+      fit();
+      requestAnimationFrame(() => { nxt.classList.remove("out"); (on ? fEmail : faceOf(false).elements.email).focus({ preventScroll: true }); });
+    }, reduce ? 0 : 130);
+  };
+  const sendReset = async (form) => {
+    const em = fEmail.value.trim(), btn = form.querySelector(".p-forgot button[type=submit]");
     if (!validEmail(em)) { fgMsg.dataset.k = "bad"; fgMsg.textContent = "Isi email yang formatnya benar."; return; }
     btn.disabled = true; fgMsg.dataset.k = ""; fgMsg.textContent = "Mengirim…";
     try { await api.recover(em); fgMsg.dataset.k = "ok"; fgMsg.textContent = "Jika email itu terdaftar, tautan reset sudah dikirim. Cek kotak masuk dan folder spam."; }
     catch (ex) { fgMsg.dataset.k = "bad"; fgMsg.textContent = ex.message; }
     setTimeout(() => { btn.disabled = false; }, 30000);
-  });
+  };
 
   const setSide = (up) => { flipUp = up; authMode = up ? "up" : "in"; flip.classList.toggle("is-up", up); sync(); go2(up); };
   setActs({
     eye: (el) => eye(el),
     flip: () => setSide(!flipUp),
     terms: (_el, e) => { e?.preventDefault?.(); ask(TERMS, { title: "Ketentuan & Privasi", ok: "Mengerti", cancel: "Tutup" }); },
-    forgot: (el) => {
-      const open = fg.hidden; fg.hidden = !open; el.setAttribute("aria-expanded", String(open));
-      if (open) { const m = faceOf(false).elements.email.value.trim(); if (m && !fg.elements.email.value) fg.elements.email.value = m; fg.elements.email.focus({ preventScroll: true }); }
-    },
+    forgot: () => setFg(true),
+    fgback: () => setFg(false),
   });
 
   faces.forEach((form) => form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (form.dataset.up === "0" && fgMode) { sendReset(form); return; }
     const up = form.dataset.up === "1", f = new FormData(form), btn = form.querySelector("button[type=submit]"), err = form.querySelector(".err");
     const email = String(f.get("email") || "").trim(), pw = String(f.get("pw") || ""), fail = (m, el) => { err.textContent = m; el?.focus({ preventScroll: true }); };
     err.textContent = "";
