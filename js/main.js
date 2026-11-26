@@ -38,6 +38,7 @@ const ctx = () => ({
 /* ---------- gerbang: harus masuk akun + punya keypass ---------- */
 const OPEN = new Set(["akun"]);
 function gate() {
+  if (!api.currentUser()) { authPage(); return; }
   view.innerHTML = `<div class="gate"><img class="gate-logo" src="icons/logo.png" alt="NinoNime" width="207" height="48">
     <p class="mu lh">${api.currentUser() ? "Akunmu belum punya keypass. Masukkan keypass sekali untuk membuka semua fitur." : "Masuk atau daftar dulu, lalu masukkan keypass sekali untuk membuka NinoNime."}</p>
     ${api.currentUser() ? `<button class="btn primary wide" data-act="kp">${icon("key", 18, 2)}Masukkan keypass</button><button class="btn ghost wide" data-act="wa">Belum mempunyai keypass</button>`
@@ -45,44 +46,66 @@ function gate() {
   setActs({ kp: async () => { if (await AN.openKeypass()) render(); }, wa: () => AN.openWa(), login: () => go("#/akun") });
 }
 
+
+/* ---------- halaman masuk / daftar (kartu berbalik) ---------- */
+// Masuk di sisi depan, Daftar di sisi belakang. "Tidak memiliki akun" membalik kartu ke kiri; "Sudah punya akun" membaliknya ke kanan.
+const TERMS = "Ketentuan penggunaan NinoNime\n\n• Aplikasi ini hanya untuk lingkaran pengguna yang diundang pemiliknya.\n• Keypass bersifat pribadi: jangan dibagikan atau dijual.\n• Kami menyimpan email dan data akunmu di server untuk login dan akses. Password disimpan terenkripsi, bukan teks asli.\n• Daftar favorit disimpan di perangkatmu.\n• Pemilik dapat mencabut keypass bila ada penyalahgunaan.";
+let flipUp = false;
+function authPage() {
+  const face = (up) => `<form class="auth-face ${up ? "back" : "front"}" data-up="${up ? 1 : 0}">
+      <b class="b17">${up ? "Daftar akun NinoNime" : "Masuk ke NinoNime"}</b>
+      <label>Email<input name="email" type="email" required autocomplete="email" placeholder="nama@email.com"></label>
+      <label>Password<input name="pw" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}" placeholder="Minimal 8 karakter"></label>
+      ${up ? `<label class="agree"><input name="agree" type="checkbox" required><span>Saya menyetujui <a href="#" data-act="terms">Ketentuan &amp; Privasi</a> NinoNime.</span></label>` : ""}
+      <span class="err" role="alert"></span>
+      <button class="btn primary" type="submit">${up ? "Daftar" : "Masuk"}</button>
+      <button class="btn ghost" type="button" data-act="flip">${up ? "Sudah punya akun? Masuk" : "Tidak memiliki akun? Daftar"}</button></form>`;
+  view.innerHTML = `<div class="auth-page"><img class="gate-logo" src="icons/logo.png" alt="NinoNime" width="207" height="48">
+    <p class="mu lh ct">Masuk dulu untuk membuka NinoNime.</p>
+    <div class="flip${flipUp ? " is-up" : ""}" id="flip"><div class="flip-in">${face(false)}${face(true)}</div></div></div><div class="pad-nav"></div>`;
+  const flip = $("#flip");
+  const sync = () => { $$(".auth-face", flip).forEach((f) => { const hide = (f.dataset.up === "1") !== flipUp; f.inert = hide; f.setAttribute("aria-hidden", hide); }); };
+  sync();
+  setActs({
+    flip: () => { flipUp = !flipUp; authMode = flipUp ? "up" : "in"; flip.classList.toggle("is-up", flipUp); sync(); setTimeout(() => $(`.auth-face[data-up="${flipUp ? 1 : 0}"] input`, flip)?.focus({ preventScroll: true }), 650); },
+    terms: (e) => { e?.preventDefault?.(); ask(TERMS, { title: "Ketentuan & Privasi", ok: "Mengerti", cancel: "Tutup" }); },
+  });
+  $$(".auth-face", flip).forEach((form) => form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const up = form.dataset.up === "1", f = new FormData(form), btn = form.querySelector("button[type=submit]"), err = form.querySelector(".err");
+    err.textContent = "";
+    if (up && !f.get("agree")) { err.textContent = "Centang persetujuan ketentuan dulu."; return; }
+    btn.disabled = true;
+    try {
+      if (up) { const r = await api.signUp(f.get("email"), f.get("pw")); if (r.confirm) { toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500); flipUp = false; authMode = "in"; authPage(); return; } }
+      else await api.signIn(f.get("email"), f.get("pw"));
+      await AN.loadAccess().catch(() => {});
+      toast("Berhasil masuk");
+      if (!AN.hasAccess() && (await AN.openKeypass())) { go("#/home"); return; }
+      render();
+    } catch (ex) { err.textContent = ex.message; btn.disabled = false; }
+  }));
+}
+
 /* ---------- Akun ---------- */
 let authMode = "in";
 async function vAkun() {
   const user = api.currentUser();
+  if (!user) { authPage(); return; }
   view.innerHTML = `<div class="page-h"><h1>Akun</h1></div>
 ${!api.configured ? `<p class="note-warn mx">${icon("info", 18)}Isi SUPABASE_URL dan SUPABASE_ANON_KEY di config.js.</p>` : ""}
 ${user ? `<div class="me-card mx"><span class="me-ini">${esc((user.email || "?")[0].toUpperCase())}</span><span class="rc-mid"><b>${esc(user.email || "")}</b><span class="mu sm">${AN.hasAccess() ? "Keypass aktif" : "Belum ada keypass"}</span></span></div>
   <div class="px"><div id="kpSec">${AN.keypassSection()}</div></div>
   <div id="adminRow"></div>
   ${group("Aplikasi", mrow("info", "Tentang NinoNime", "Versi " + esc(VERSION), "about") + mrow("out", "Keluar", "", "logout", true))}`
-  : `<form id="auth" class="auth mx"><b class="b17">${authMode === "up" ? "Daftar akun NinoNime" : "Masuk ke NinoNime"}</b>
-    <label>Email<input name="email" type="email" required autocomplete="email" placeholder="nama@email.com"></label>
-    <label>Password<input name="pw" type="password" required minlength="8" autocomplete="${authMode === "up" ? "new-password" : "current-password"}" placeholder="Minimal 8 karakter"></label>
-    <span class="err" id="aerr" role="alert"></span>
-    <button class="btn primary" type="submit">${authMode === "up" ? "Daftar" : "Masuk"}</button>
-    <button class="btn ghost" type="button" data-act="mode">${authMode === "up" ? "Sudah punya akun? Masuk" : "Belum punya akun? Daftar"}</button></form>`}
+  : ""}
 <div class="pad-nav"></div>`;
   const redrawKp = () => { const el = $("#kpSec"); if (el) el.innerHTML = AN.keypassSection(); };
   setActs({
     ...AN.keypassActs(redrawKp),
-    mode: () => { authMode = authMode === "up" ? "in" : "up"; vAkun(); },
     about: () => toast(`NinoNime v${VERSION}`),
     admin: () => go("#/admin"),
     logout: async () => { if (!(await ask("Keluar dari akun?", { ok: "Keluar", danger: true }))) return; AN.player.close(); await api.signOut(); toast("Kamu sudah keluar"); vAkun(); },
-  });
-  const form = $("#auth");
-  form?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = new FormData(form), btn = form.querySelector("button[type=submit]"), err = $("#aerr");
-    err.textContent = ""; btn.disabled = true;
-    try {
-      if (authMode === "up") { const r = await api.signUp(f.get("email"), f.get("pw")); if (r.confirm) { toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500); authMode = "in"; vAkun(); return; } }
-      else await api.signIn(f.get("email"), f.get("pw"));
-      await AN.loadAccess().catch(() => {});
-      toast("Berhasil masuk");
-      if (!AN.hasAccess() && (await AN.openKeypass())) { go("#/home"); return; }
-      vAkun();
-    } catch (ex) { err.textContent = ex.message; btn.disabled = false; }
   });
   if (user) {
     AN.loadAccess().then(redrawKp).catch(() => {});
