@@ -69,4 +69,5 @@ Tambahkan domain video ke `media-src` / `frame-src` di Content-Security-Policy `
 ## Username, lupa password, dan indikator password
 
 - Daftar memakai **username unik** (3–20 karakter; huruf kecil, angka, titik, garis bawah; diawali huruf). Dicek langsung lewat `nn_username_free`, dipesan saat daftar (`nn_reserve_username`), dan diikat ke akun saat pertama masuk (`nn_claim_username`). Tabelnya `nn_profiles`, tidak menyentuh tabel Ninokuu.
-- **Lupa password?** mengirim tautan reset ke halaman `RESET_URL` di `config.js` (default: halaman reset Ninokuu, karena akunnya satu). Alamat itu harus ada di Supabase → Auth → URL Configuration → Redirect URLs.
+- **Alamat & email:** NinoNime tinggal di `ninokuu.site/ninonime/` (folder sendiri, tidak menyentuh halaman Ninokuu). Tautan email verifikasi → `ninokuu.site/ninonime/verified/`, tautan lupa password → `ninokuu.site/ninonime/resetpassword/` (`VERIFY_URL` dan `RESET_URL` di `config.js`). Tambahkan `https://ninokuu.site/ninonime/**` ke Supabase → Auth → URL Configuration → Redirect URLs. Site URL Supabase dibiarkan milik Ninokuu.
+- **Menerbitkan ke situs:** workflow *Terbitkan ke ninokuu.site/ninonime* menyalin aplikasi ke repo `ninokuu-site` (butuh secret `SITE_TOKEN`), atau manual: `sh scripts/rakit-situs.sh ../ninokuu-site` lalu commit di repo situs.

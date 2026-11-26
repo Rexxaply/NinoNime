@@ -1,0 +1,33 @@
+# Menerbitkan NinoNime ke ninokuu.site/ninonime/ (repo Rexxaply/ninokuu-site, folder sendiri: tidak menyentuh halaman Ninokuu).
+# Butuh secret SITE_TOKEN: token GitHub (fine-grained) dengan izin Contents: Read and write HANYA untuk repo ninokuu-site.
+name: Terbitkan ke ninokuu.site/ninonime
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["apk/**", "docs/**", "supabase/**", "README.md"]
+  workflow_dispatch:
+concurrency:
+  group: situs
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - name: Ambil repo situs
+        env: { SITE_TOKEN: "${{ secrets.SITE_TOKEN }}" }
+        run: |
+          [ -n "$SITE_TOKEN" ] || { echo "::error::Secret SITE_TOKEN belum diisi (lihat README)."; exit 1; }
+          git clone --depth 1 "https://x-access-token:${SITE_TOKEN}@github.com/Rexxaply/ninokuu-site.git" ../ninokuu-site
+      - name: Rakit folder ninonime/
+        run: sh scripts/rakit-situs.sh ../ninokuu-site
+      - name: Commit dan dorong
+        working-directory: ../ninokuu-site
+        run: |
+          git add ninonime
+          git diff --cached --quiet && { echo "Tidak ada perubahan."; exit 0; }
+          git -c user.name="NinoNime CI" -c user.email="ci@users.noreply.github.com" commit -m "NinoNime: perbarui ninonime/ ($GITHUB_SHA)"
+          git push

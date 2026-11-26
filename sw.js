@@ -4,7 +4,7 @@ const SHELL = ["./", "index.html", "config.js", "manifest.webmanifest", "css/bas
   "js/main.js", "js/shell.js", "js/gate.js", "js/auth.js", "js/akun.js", "js/navbar.js", "js/keyboard.js", "js/api.js", "js/ui.js", "js/icons.js", "js/anime.js", "js/const.js", "js/icons-anime.js", "js/data.js", "js/lib.js", "js/access.js", "js/home.js", "js/jadwal.js", "js/search.js", "js/fav.js", "js/fly.js", "js/detail.js", "js/player.js", "js/admin.js", "js/sources.js", "icons/logo.png", "icons/icon-192.png"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(VER).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VER).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k.startsWith("ninonime-") && k !== VER).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", (e) => {
   const req = e.request, url = new URL(req.url);

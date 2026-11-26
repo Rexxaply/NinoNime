@@ -65,11 +65,12 @@ async function accessToken() {
   return refreshing;
 }
 export async function signIn(email, password) { setSession(await authCall("/token?grant_type=password", { email: email.trim(), password })); return session; }
-const RESET_URL = String(C.RESET_URL || "https://ninokuu.site/resetpassword/");
-// "Lupa password?": mengirim tautan reset ke email (halaman reset sama dengan Ninokuu; akunnya satu)
+const RESET_URL = String(C.RESET_URL || "https://ninokuu.site/ninonime/resetpassword/");
+const VERIFY_URL = String(C.VERIFY_URL || "https://ninokuu.site/ninonime/verified/");
+// "Lupa password?": mengirim tautan reset ke email (halaman reset NinoNime di ninokuu.site/ninonime/resetpassword/; akunnya tetap satu dengan Ninokuu)
 export async function recover(email) { await authCall("/recover?redirect_to=" + encodeURIComponent(RESET_URL), { email: email.trim() }); }
 export async function signUp(email, password, username = "") {
-  const r = await authCall("/signup", { email: email.trim(), password, ...(username ? { data: { nn_username: username } } : {}) });
+  const r = await authCall("/signup?redirect_to=" + encodeURIComponent(VERIFY_URL), { email: email.trim(), password, ...(username ? { data: { nn_username: username } } : {}) });
   if (r?.access_token) { setSession(r); return { session }; }
   return { confirm: true };   // "Confirm email" aktif di Supabase: tunggu konfirmasi
 }

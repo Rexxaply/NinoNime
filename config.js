@@ -7,8 +7,12 @@ window.NINONIME_CONFIG = {
   // Isi "ninokuu:session" bila NinoNime satu alamat situs dengan Ninokuu (sekali login untuk keduanya).
   // Biarkan kosong bila beda domain: login terpisah, akun tetap sama.
   SESSION_KEY: "",
-  // Halaman reset password (sama dengan Ninokuu karena akunnya satu). Alamat ini harus ada di Supabase → Auth → URL Configuration → Redirect URLs.
-  RESET_URL: "https://ninokuu.site/resetpassword/",
+  // Alamat NinoNime: ninokuu.site/ninonime/ (folder sendiri, tidak menyentuh halaman Ninokuu).
+  // Kedua alamat di bawah HARUS ada di Supabase → Auth → URL Configuration → Redirect URLs (cukup tambah: https://ninokuu.site/ninonime/**).
+  // Tujuan tautan di email verifikasi (setelah daftar):
+  VERIFY_URL: "https://ninokuu.site/ninonime/verified/",
+  // Tujuan tautan di email "lupa password":
+  RESET_URL: "https://ninokuu.site/ninonime/resetpassword/",
   // nomor bot WhatsApp yang membuat keypass (format internasional, tanpa +)
   WA_BOT: "628115214446",
 };

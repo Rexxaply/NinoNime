@@ -150,7 +150,7 @@ export function authPage() {
     if (!validEmail(em)) { fgMsg.dataset.k = "bad"; fgMsg.textContent = "Isi email yang formatnya benar."; return; }
     btn.disabled = true; fgMsg.dataset.k = ""; fgMsg.textContent = "Mengirim…";
     try { await api.recover(em); fgMsg.dataset.k = "ok"; fgMsg.textContent = "Jika email itu terdaftar, tautan reset sudah dikirim. Cek kotak masuk dan folder spam.";
-      await ask(`Jika ${em} terdaftar, tautan reset password sudah dikirim. Buka emailmu (cek juga folder spam) lalu tekan tautannya: kamu akan diarahkan ke halaman reset password Ninokuu. Setelah password baru tersimpan, kembali ke NinoNime dan masuk.`, { title: "Tautan reset terkirim", ok: "Mengerti", cancel: "" }); }
+      await ask(`Jika ${em} terdaftar, tautan reset password sudah dikirim. Buka emailmu (cek juga folder spam) lalu tekan tautannya: kamu akan diarahkan ke halaman reset password NinoNime. Setelah password baru tersimpan, kembali ke NinoNime dan masuk.`, { title: "Tautan reset terkirim", ok: "Mengerti", cancel: "" }); }
     catch (ex) { fgMsg.dataset.k = "bad"; fgMsg.textContent = ex.message; }
     setTimeout(() => { btn.disabled = false; }, 30000);
   };

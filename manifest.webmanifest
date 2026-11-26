@@ -2,6 +2,7 @@
   "name": "NinoNime",
   "short_name": "NinoNime",
   "description": "Jadwal, info, dan tontonan anime",
+  "id": "./",
   "start_url": "./#/home",
   "scope": "./",
   "display": "standalone",
