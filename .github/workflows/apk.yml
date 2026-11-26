@@ -1,14 +1,17 @@
 # Membangun APK NinoNime (Capacitor) dari berkas web di repo ini.
-# Jalankan dari tab Actions → "Build APK" → Run workflow, atau otomatis saat berkas VERSION berubah.
+# Jalan otomatis tiap push ke main yang mengubah berkas aplikasi (js, css, index.html, config.js, ikon, apk/, VERSION),
+# atau manual dari tab Actions → "Build APK" → Run workflow.
+# Nomor versi otomatis: <VERSION mayor.minor>.<nomor build>, misal 0.1.12; versionCode = nomor build (selalu naik, syarat update APK).
 # Hasil: GitHub Release "apk-terbaru" berisi ninonime.apk (tautan tetap, bisa dibagikan):
 #   https://github.com/<pemilik>/<repo>/releases/download/apk-terbaru/ninonime.apk
-# Tanpa secret: config.js hanya berisi kunci publik. APK ditandatangani kunci debug (cukup untuk dipasang
-# langsung). Untuk Play Store, tandatangani dengan kunci rilis sendiri.
+# TANDA TANGAN: Android hanya mau memperbarui APK yang ditandatangani kunci yang SAMA. Simpan kunci tetap di
+# Settings → Secrets and variables → Actions → secret "ANDROID_KEYSTORE_B64" (isi: keystore dalam base64).
+# Tanpa secret itu, tiap build memakai kunci acak dan pengguna harus hapus-pasang ulang. JANGAN sampai kunci hilang.
 name: Build APK
 on:
   push:
     branches: [main]
-    paths: ["VERSION", "apk/**", ".github/workflows/apk.yml"]
+    paths: ["VERSION", "apk/**", "index.html", "config.js", "manifest.webmanifest", "sw.js", "css/**", "js/**", "icons/**", ".github/workflows/apk.yml"]
   workflow_dispatch:
 permissions: {}
 concurrency:
@@ -30,11 +33,18 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
 
+      - name: Nomor versi
+        working-directory: .
+        run: |
+          BASE="$(cut -d. -f1,2 VERSION)"
+          echo "VER=$BASE.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
       - name: Berkas web
         working-directory: .
         run: |
           mkdir -p apk/www
           cp -r index.html config.js manifest.webmanifest sw.js css js icons apk/www/
+          sed -i "s/VERSION: \"[^\"]*\"/VERSION: \"$VER\"/" apk/www/config.js
           mkdir -p apk/assets
           cp icons/icon-512.png apk/assets/icon-only.png
           cp icons/icon-512.png apk/assets/icon-foreground.png
@@ -52,9 +62,22 @@ jobs:
         continue-on-error: true
         run: npx --yes @capacitor/assets generate --android --iconBackgroundColor '#0B1018' --iconBackgroundColorDark '#0B1018'
 
+      - name: Kunci tanda tangan tetap
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Memakai kunci tetap dari secret."
+          else
+            echo "::warning::Secret ANDROID_KEYSTORE_B64 belum diisi: APK ini TIDAK bisa menimpa versi sebelumnya."
+          fi
+
       - name: Bangun APK
         working-directory: apk/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/; s/versionName \"1.0\"/versionName \"$VER\"/" app/build.gradle
+          ./gradlew assembleDebug --no-daemon
 
       - name: Ganti nama berkas
         run: cp android/app/build/outputs/apk/debug/app-debug.apk ninonime.apk
@@ -70,4 +93,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete apk-terbaru --yes --cleanup-tag 2>/dev/null || true
-          gh release create apk-terbaru ninonime.apk --title "NinoNime APK terbaru" --notes "APK terbaru NinoNime. Izinkan pemasangan dari sumber tidak dikenal lalu buka berkas ini."
+          NOTE="v$VER: $(git log -1 --pretty=%s)"
+          gh release create apk-terbaru ninonime.apk --title "NinoNime v$VER" --notes "$NOTE"
