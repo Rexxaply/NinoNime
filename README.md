@@ -71,3 +71,8 @@ Tambahkan domain video ke `media-src` / `frame-src` di Content-Security-Policy `
 - Daftar memakai **username unik** (3–20 karakter; huruf kecil, angka, titik, garis bawah; diawali huruf). Dicek langsung lewat `nn_username_free`, dipesan saat daftar (`nn_reserve_username`), dan diikat ke akun saat pertama masuk (`nn_claim_username`). Tabelnya `nn_profiles`, tidak menyentuh tabel Ninokuu.
 - **Alamat & email:** NinoNime tinggal di `ninokuu.site/ninonime/` (folder sendiri, tidak menyentuh halaman Ninokuu): `/ninonime/` = halaman unduh, `/ninonime/update/` = pembaruan, `/ninonime/app/` = aplikasinya (PWA), lalu `verified/` dan `resetpassword/`. Halaman unduh dan update dikelola langsung di repo `ninokuu-site` (skrip rakit hanya menimpa `app/`, `verified/`, `resetpassword/`). Tautan email verifikasi → `ninokuu.site/ninonime/verified/`, tautan lupa password → `ninokuu.site/ninonime/resetpassword/` (`VERIFY_URL` dan `RESET_URL` di `config.js`). Tambahkan `https://ninokuu.site/ninonime/**` ke Supabase → Auth → URL Configuration → Redirect URLs. Site URL Supabase dibiarkan milik Ninokuu.
 - **Menerbitkan ke situs:** workflow *Terbitkan ke ninokuu.site/ninonime* menyalin aplikasi ke repo `ninokuu-site` (butuh secret `SITE_TOKEN`), atau manual: `sh scripts/rakit-situs.sh ../ninokuu-site` lalu commit di repo situs.
+
+## Cabang (branch)
+
+- `main`: versi rilis. Setiap push yang mengubah berkas aplikasi membangun APK dan memperbarui rilis `apk-terbaru` (dipakai halaman unduh di ninokuu.site).
+- `dev`: tempat mengembangkan dan mencoba. Push ke `dev` tidak membangun APK dan tidak menyentuh rilis. Kalau sudah stabil, gabungkan ke `main` (`git checkout main && git merge dev && git push`, atau lewat Pull Request).
