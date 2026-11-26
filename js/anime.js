@@ -39,10 +39,22 @@ export async function loadAccess() {
   api.lsSet(accKey(), v);
   return v;
 }
-// pesan otomatis untuk bot: perintah + email akun yang sedang login
-export const BOT_CMD = ".keypass";
-const waLink = (email) => `https://wa.me/${WA_BOT}?text=${encodeURIComponent(`${BOT_CMD} ${email || ""}`.trim())}`;
-export const openWa = () => window.open(waLink(api.currentUser()?.email || ""), "_blank");
+// pesan otomatis untuk bot: kode aktivasi acak (dibuat server, terkait email akun) + email + larangan mengubah pesan
+export const waText = (code, email) =>
+  `Kode aktivasi : ${code}\nEmail : ${email}\n\n⚠️ Jangan hapus atau ubah pesan ini. Langsung kirim saja.`;
+const waLink = (text) => `https://wa.me/${WA_BOT}?text=${encodeURIComponent(text)}`;
+export async function openWa() {
+  const w = window.open("", "_blank"); // dibuka dulu supaya tidak diblokir pemblokir pop-up
+  try {
+    const r = await api.rpc("nn_request_activation");
+    if (!r?.ok) throw new Error(r?.error || "Gagal membuat kode aktivasi.");
+    const url = waLink(waText(r.code, r.email));
+    if (w) w.location.href = url; else location.href = url;
+  } catch (e) {
+    w?.close();
+    toast(e?.message || "Gagal membuka WhatsApp.");
+  }
+}
 
 // pop-up keypass. Selesai → resolve(true) bila akses didapat.
 export function openKeypass() {
@@ -794,7 +806,7 @@ export async function vKeypassAdmin(view, x) {
   <div class="card col g10"><b>Buat keypass baru</b><span class="mu sm lh">Satu keypass untuk satu akun. Kirim ke pengguna lewat WhatsApp; setelah dipakai, keypass terikat ke akun itu.</span>
     <div class="row g8"><input class="kp-in" id="kpNote" maxlength="80" placeholder="Catatan (mis. nama pembeli)"><input class="kp-in kp-n" id="kpCount" type="number" min="1" max="50" value="1" aria-label="Jumlah"></div>
     <button class="btn primary" data-act="make">${icon("key", 18, 2)}Buat keypass</button><div id="kpNew"></div></div>
-  <div class="card col g10"><b>Kunci bot WhatsApp</b><span class="mu sm lh">Bot memakai kunci ini untuk membuat keypass otomatis (perintah <code>${BOT_CMD} email</code>). Kunci hanya tampil sekali; simpan di pengaturan bot. Panduan: docs/bot-keypass.md di repo</span>
+  <div class="card col g10"><b>Kunci bot WhatsApp</b><span class="mu sm lh">Bot memakai kunci ini untuk membuat keypass otomatis dari pesan berisi kode aktivasi + email. Kunci hanya tampil sekali; simpan di pengaturan bot. Panduan: docs/bot-keypass.md di repo</span>
     <div class="row g8"><input class="kp-in" id="bkLabel" maxlength="60" placeholder="Nama bot (mis. Bot Termux)"><button class="btn ghost sm" data-act="mkBot">Buat kunci</button></div>
     <div id="bkNew"></div><div id="bkList"></div></div>
   <div class="sec-h"><h2>Daftar keypass</h2><button class="sq-btn" data-act="reload" aria-label="Muat ulang">${icon("refresh", 18, 2)}</button></div>

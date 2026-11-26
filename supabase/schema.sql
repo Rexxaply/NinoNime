@@ -4,7 +4,7 @@
 --   insert into public.nn_admins (user_id) select id from auth.users where email = 'emailkamu@gmail.com';
 --
 -- Alur:
---   1. Keypass dibuat oleh bot WhatsApp (nn_bot_keypass, otomatis berdasarkan email) atau oleh admin
+--   1. Keypass dibuat oleh bot WhatsApp (nn_bot_keypass, lewat kode aktivasi + email) atau oleh admin
 --      (Akun → Admin → Keypass & bot WhatsApp, atau: select * from public.nn_make_keypass(5, 'catatan');)
 --   2. Bot / admin mengirim keypass ke pengguna lewat WhatsApp. Keypass dari bot hanya bisa dipakai akun dengan email itu.
 --   3. Pengguna memasukkan keypass sekali (nn_redeem_keypass). Keypass terikat ke akunnya dan tidak bisa dipakai akun lain.
@@ -260,12 +260,70 @@ $$;
 revoke all on function public.nn_revoke_bot_key(bigint) from public, anon;
 grant execute on function public.nn_revoke_bot_key(bigint) to authenticated;
 
--- dipanggil bot: POST /rest/v1/rpc/nn_bot_keypass { p_key, p_email, p_wa }
+-- =====================================================================
+-- Kode aktivasi: dibuat aplikasi untuk pengguna yang sedang login, dikirim lewat pesan WhatsApp.
+-- Bot hanya membuat keypass bila kode aktivasi cocok dengan email di pesan, belum dipakai, dan belum kedaluwarsa (30 menit).
+-- Satu kode hanya bisa dipakai 1x, dan terkunci ke email serta nomor pengirim yang memakainya.
+-- =====================================================================
+create table if not exists public.nn_activation (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  email text not null,
+  code text not null unique,
+  wa text,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '30 minutes',
+  used_at timestamptz
+);
+create index if not exists nn_activation_user_idx on public.nn_activation (user_id, created_at desc);
+alter table public.nn_activation enable row level security;
+revoke all on table public.nn_activation from anon, authenticated;
+
+-- aplikasi: minta kode aktivasi untuk akun yang sedang login → { ok, code, email, expires_at } atau { ok:false, error }
+create or replace function public.nn_request_activation()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  em text; a public.nn_activation; n int;
+  abc constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  j int; s text; b bytea;
+begin
+  if uid is null then return json_build_object('ok', false, 'error', 'Masuk dulu ke akunmu.'); end if;
+  select lower(u.email) into em from auth.users u where u.id = uid;
+  if em is null then return json_build_object('ok', false, 'error', 'Akun tidak punya email.'); end if;
+  if exists (select 1 from public.nn_keypass where user_id = uid and not revoked) then
+    return json_build_object('ok', false, 'error', 'Akunmu sudah punya keypass.');
+  end if;
+  -- pakai ulang kode yang masih berlaku supaya tombol tidak membuat kode berulang
+  select * into a from public.nn_activation where user_id = uid and used_at is null and expires_at > now() order by created_at desc limit 1;
+  if a.id is null then
+    select count(*) into n from public.nn_activation where user_id = uid and created_at > now() - interval '1 hour';
+    if n >= 5 then return json_build_object('ok', false, 'error', 'Terlalu sering meminta kode. Coba lagi nanti.'); end if;
+    loop
+      b := extensions.gen_random_bytes(8); s := '';
+      for j in 0 .. 7 loop s := s || substr(abc, (get_byte(b, j) % 32) + 1, 1); end loop;
+      s := 'AK-' || substr(s, 1, 4) || '-' || substr(s, 5, 4);
+      exit when not exists (select 1 from public.nn_activation where code = s);
+    end loop;
+    insert into public.nn_activation (user_id, email, code) values (uid, em, s) returning * into a;
+  end if;
+  return json_build_object('ok', true, 'code', a.code, 'email', a.email, 'expires_at', a.expires_at);
+end;
+$$;
+revoke all on function public.nn_request_activation() from public, anon;
+grant execute on function public.nn_request_activation() to authenticated;
+
+-- dipanggil bot: POST /rest/v1/rpc/nn_bot_keypass { p_key, p_email, p_wa, p_activation }
 -- hasil: { ok, status: baru|sudah_ada|sudah_aktif, code } atau { ok: false, error }
 --   sudah_aktif = email itu sudah memakai keypass (kode yang sama dikirim ulang)
 --   sudah_ada   = keypass untuk email itu sudah dibuat tapi belum dipakai (kode yang sama dikirim ulang)
 -- Batas: maks 3 keypass baru per nomor WhatsApp per 24 jam, dan maks 60 keypass baru per kunci bot per jam.
-create or replace function public.nn_bot_keypass(p_key text, p_email text, p_wa text default null)
+drop function if exists public.nn_bot_keypass(text, text, text);
+create or replace function public.nn_bot_keypass(p_key text, p_email text, p_wa text default null, p_activation text default null)
 returns json
 language plpgsql
 security definer
@@ -273,37 +331,53 @@ set search_path = public
 as $$
 declare
   bk public.nn_bot_keys;
+  act public.nn_activation;
   e text := lower(trim(coalesce(p_email, '')));
   w text := nullif(regexp_replace(coalesce(p_wa, ''), '[^0-9]', '', 'g'), '');
-  uid uuid; c text; n int;
+  ac text := upper(trim(coalesce(p_activation, '')));
+  uid uuid; c text; n int; st text;
 begin
   select * into bk from public.nn_bot_keys
     where key_hash = encode(extensions.digest(coalesce(p_key, ''), 'sha256'), 'hex') and not revoked;
   if bk.id is null then return json_build_object('ok', false, 'error', 'Kunci bot tidak valid.'); end if;
   update public.nn_bot_keys set last_used_at = now() where id = bk.id;
+  if w is null then return json_build_object('ok', false, 'error', 'Nomor pengirim tidak terbaca.'); end if;
   if e !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then return json_build_object('ok', false, 'error', 'Format email tidak valid.'); end if;
-  select u.id into uid from auth.users u where lower(u.email) = e and u.email_confirmed_at is not null limit 1;
-  if uid is null then
-    return json_build_object('ok', false, 'error', 'Email ini belum terdaftar di NinoNime (atau belum dikonfirmasi). Daftar dulu di aplikasi NinoNime, lalu kirim lagi.');
+  if ac = '' then return json_build_object('ok', false, 'error', 'Kode aktivasi tidak ada di pesan. Tekan tombol "belum mempunyai keypass" di aplikasi, lalu kirim pesannya tanpa diubah.'); end if;
+
+  select * into act from public.nn_activation where code = ac;
+  if act.id is null or lower(act.email) <> e then
+    return json_build_object('ok', false, 'error', 'Kode aktivasi tidak cocok dengan email. Ulangi dari aplikasi tanpa mengubah pesan.');
   end if;
+  if act.used_at is not null then return json_build_object('ok', false, 'error', 'Kode aktivasi ini sudah dipakai. Minta kode baru dari aplikasi.'); end if;
+  if act.expires_at <= now() then return json_build_object('ok', false, 'error', 'Kode aktivasi kedaluwarsa. Minta kode baru dari aplikasi.'); end if;
+  uid := act.user_id;
+  if not exists (select 1 from auth.users u where u.id = uid and u.email_confirmed_at is not null) then
+    return json_build_object('ok', false, 'error', 'Email belum dikonfirmasi. Cek kotak masuk emailmu, lalu coba lagi.');
+  end if;
+
   select code into c from public.nn_keypass where user_id = uid and not revoked;
-  if c is not null then return json_build_object('ok', true, 'status', 'sudah_aktif', 'code', c); end if;
-  select code into c from public.nn_keypass where lower(reserved_email) = e and user_id is null and not revoked order by created_at desc limit 1;
-  if c is not null then return json_build_object('ok', true, 'status', 'sudah_ada', 'code', c); end if;
-  if w is not null then
+  if c is not null then st := 'sudah_aktif'; end if;
+  if c is null then
+    select code into c from public.nn_keypass where lower(reserved_email) = e and user_id is null and not revoked order by created_at desc limit 1;
+    if c is not null then st := 'sudah_ada'; end if;
+  end if;
+  if c is null then
     select count(*) into n from public.nn_keypass where wa = w and created_at > now() - interval '24 hours';
     if n >= 3 then return json_build_object('ok', false, 'error', 'Nomor ini sudah meminta 3 keypass hari ini. Coba lagi besok.'); end if;
+    select count(*) into n from public.nn_keypass where note = 'bot:' || bk.id and created_at > now() - interval '1 hour';
+    if n >= 60 then return json_build_object('ok', false, 'error', 'Bot sedang sibuk. Coba lagi sebentar.'); end if;
+    c := public.nn_keypass_new_code();
+    insert into public.nn_keypass (code, note, reserved_email, wa) values (c, 'bot:' || bk.id, e, w);
+    st := 'baru';
   end if;
-  select count(*) into n from public.nn_keypass where note = 'bot:' || bk.id and created_at > now() - interval '1 hour';
-  if n >= 60 then return json_build_object('ok', false, 'error', 'Bot sedang sibuk. Coba lagi sebentar.'); end if;
-  c := public.nn_keypass_new_code();
-  insert into public.nn_keypass (code, note, reserved_email, wa) values (c, 'bot:' || bk.id, e, w);
-  return json_build_object('ok', true, 'status', 'baru', 'code', c);
+  update public.nn_activation set used_at = now(), wa = w where id = act.id;
+  return json_build_object('ok', true, 'status', st, 'code', c);
 end;
 $$;
-revoke all on function public.nn_bot_keypass(text, text, text) from public;
-grant execute on function public.nn_bot_keypass(text, text, text) to anon, authenticated;
+revoke all on function public.nn_bot_keypass(text, text, text, text) from public;
+grant execute on function public.nn_bot_keypass(text, text, text, text) to anon, authenticated;
 
-grant all on public.nn_keypass, public.nn_keypass_tries , public.nn_bot_keys, public.nn_admins to service_role;
+grant all on public.nn_keypass, public.nn_keypass_tries, public.nn_bot_keys, public.nn_admins, public.nn_activation to service_role;
 
 commit;

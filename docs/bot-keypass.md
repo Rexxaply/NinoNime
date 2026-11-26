@@ -1,49 +1,45 @@
 # Bot WhatsApp: keypass NinoNime otomatis
 
-Pengguna yang belum punya keypass menekan **"Belum mempunyai keypass"** di NinoNime. WhatsApp terbuka ke nomor bot
-dengan pesan yang sudah terisi:
+Pengguna yang belum punya keypass menekan **"Belum mempunyai keypass"** di NinoNime. Aplikasi meminta **kode aktivasi** acak ke Supabase
+(terikat ke akun yang sedang login), lalu membuka WhatsApp ke nomor bot dengan pesan yang sudah terisi:
 
 ```
-.keypass email@pengguna.com
+Kode aktivasi : AK-7A24-WN6P
+Email : pengguna@email.com
+
+⚠️ Jangan hapus atau ubah pesan ini. Langsung kirim saja.
 ```
 
-Bot membaca perintah itu, meminta keypass ke Supabase, lalu membalas kodenya. Pengguna menempel kode di aplikasi (sekali saja).
+Bot membaca kode dan email, mengirimnya ke Supabase untuk divalidasi, lalu membalas keypass `NK-XXXX-XXXX-XXXX`.
+Pengguna menempel keypass di aplikasi (sekali saja).
 
-## Kenapa aman tanpa kunci service_role
-
-Bot **tidak** memegang kunci `service_role` dan tidak menulis ke tabel secara langsung. Bot hanya memanggil satu fungsi,
-`nn_bot_keypass`, dengan:
-
-- **kunci publik** Supabase (`anon`, sama seperti yang ada di aplikasi), dan
-- **kunci bot** rahasia (`nkbot_…`) yang dibuat di aplikasi: Akun → Admin → *Keypass & bot WhatsApp* → *Kunci bot WhatsApp*.
-
-Di database hanya tersimpan hash SHA-256 kunci bot. Kalau kunci bocor, cabut dari halaman yang sama lalu buat yang baru.
-
-Fungsi itu juga yang memeriksa semuanya di server:
+## Aturan kode aktivasi (dicek di server)
 
 | Aturan | Hasil |
 |---|---|
-| Email harus sudah terdaftar & dikonfirmasi di NinoNime | selain itu bot membalas "Email belum terdaftar…" |
-| Keypass dari bot **hanya bisa dipakai akun dengan email itu** | orang lain tidak bisa memakai keypass hasil minta email orang lain |
-| Email sudah punya keypass aktif / sudah dibuatkan | kode yang sama dikirim ulang (tidak membuat kode baru) |
-| Maks 3 keypass baru per nomor WhatsApp per 24 jam | balasan "sudah meminta 3 keypass hari ini" |
-| Maks 60 keypass baru per kunci bot per jam | balasan "Bot sedang sibuk" |
+| Kode harus cocok dengan email di pesan | selain itu bot membalas "Kode aktivasi tidak cocok" (email orang lain tidak bisa diminta) |
+| Kode hanya bisa dipakai **1x** | pemakaian kedua ditolak; kode dikunci ke email dan nomor pengirim yang memakainya |
+| Kedaluwarsa 30 menit | pengguna menekan tombol lagi untuk kode baru |
+| Maks 5 kode per akun per jam | mencegah spam dari aplikasi |
+| Maks 3 keypass baru per nomor WhatsApp per 24 jam, 60 per kunci bot per jam | bot membalas pesan batas |
+| Akun sudah punya keypass | aplikasi tidak membuat kode aktivasi baru |
+
+Bot **tidak** memegang `service_role`. Bot hanya memakai kunci publik (`anon`) + kunci bot rahasia (`nkbot_…`, hash SHA-256-nya
+saja yang tersimpan; dibuat di Akun → Admin → *Keypass & bot WhatsApp*). Kalau bocor, cabut dari halaman yang sama.
 
 ## Langkah pemasangan
 
-1. Jalankan `supabase/schema.sql` di Supabase → SQL Editor (aman dijalankan ulang), lalu jadikan akunmu admin (lihat README).
-2. Di aplikasi: Akun → Admin → **Keypass & bot WhatsApp** → *Kunci bot WhatsApp* → **Buat kunci**. Salin kuncinya
-   (hanya tampil sekali).
-3. Simpan di pengaturan bot (mis. file `.env` di Termux):
+1. Jalankan `supabase/schema.sql` (aman dijalankan ulang), jadikan akunmu admin (lihat README).
+2. Di aplikasi: Akun → Admin → *Kunci bot WhatsApp* → **Buat kunci**. Salin (hanya tampil sekali).
+3. Simpan di pengaturan bot (`.env`):
 
 ```
 SUPABASE_URL=https://<proyek-kamu>.supabase.co
-SUPABASE_ANON_KEY=<kunci publik anon, sama dengan di aplikasi>
-NINOKUU_BOT_KEY=nkbot_...
+SUPABASE_ANON_KEY=<kunci publik anon>
+NINONIME_BOT_KEY=nkbot_...
 ```
 
-4. Tambahkan perintah `.keypass` ke bot (contoh di bawah).
-5. Nomor bot diatur di `config.js` → `WA_BOT`.
+4. Tambahkan pengenal pesan di bot (contoh di bawah). Nomor bot diatur di `config.js` → `WA_BOT`.
 
 ## API
 
@@ -53,7 +49,7 @@ apikey: {SUPABASE_ANON_KEY}
 Authorization: Bearer {SUPABASE_ANON_KEY}
 Content-Type: application/json
 
-{ "p_key": "nkbot_...", "p_email": "email@pengguna.com", "p_wa": "6281234567890" }
+{ "p_key": "nkbot_...", "p_email": "pengguna@email.com", "p_wa": "6281234567890", "p_activation": "AK-7A24-WN6P" }
 ```
 
 Balasan:
@@ -61,36 +57,35 @@ Balasan:
 ```json
 { "ok": true, "status": "baru", "code": "NK-ABCD-EFGH-JKLM" }
 { "ok": true, "status": "sudah_ada", "code": "NK-..." }     // sudah dibuatkan, belum dipakai
-{ "ok": true, "status": "sudah_aktif", "code": "NK-..." }   // email itu sudah memakai keypass
-{ "ok": false, "error": "Email ini belum terdaftar di NinoNime ..." }
+{ "ok": true, "status": "sudah_aktif", "code": "NK-..." }   // akun itu sudah memakai keypass
+{ "ok": false, "error": "Kode aktivasi ini sudah dipakai. ..." }
 ```
 
-## Contoh perintah bot (Node.js, mis. Baileys)
+## Contoh (Node.js, Baileys)
 
 ```js
-// .keypass email@pengguna.com
-const { SUPABASE_URL, SUPABASE_ANON_KEY, NINOKUU_BOT_KEY } = process.env;
+const { SUPABASE_URL, SUPABASE_ANON_KEY, NINONIME_BOT_KEY } = process.env;
 
-async function mintaKeypass(email, wa) {
+async function mintaKeypass(email, wa, aktivasi) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/nn_bot_keypass`, {
     method: "POST",
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_key: NINOKUU_BOT_KEY, p_email: email, p_wa: wa }),
+    body: JSON.stringify({ p_key: NINONIME_BOT_KEY, p_email: email, p_wa: wa, p_activation: aktivasi }),
   });
   if (!r.ok) throw new Error(`Server ${r.status}`);
   return r.json();
 }
 
-// di handler pesan masuk:
-// text = isi pesan, from = "6281234567890@s.whatsapp.net"
-const m = text.trim().match(/^\.keypass\s+(\S+@\S+\.\S+)$/i);
-if (m) {
+// di handler pesan masuk (text = isi pesan, from = "6281234567890@s.whatsapp.net")
+const kode = text.match(/Kode aktivasi\s*:\s*(AK-[A-Z0-9]{4}-[A-Z0-9]{4})/i);
+const mail = text.match(/Email\s*:\s*(\S+@\S+\.\S+)/i);
+if (kode && mail) {
   const wa = from.split("@")[0];
   try {
-    const r = await mintaKeypass(m[1], wa);
+    const r = await mintaKeypass(mail[1], wa, kode[1]);
     const balas = !r.ok ? `❌ ${r.error}`
-      : r.status === "sudah_aktif" ? `✅ Email ini sudah memakai keypass:\n\n*${r.code}*`
-      : `🎬 Keypass NinoNime untuk ${m[1]}:\n\n*${r.code}*\n\nBuka NinoNime → Masukkan keypass → tempel kode ini. Keypass hanya berlaku untuk akun dengan email tersebut.`;
+      : r.status === "sudah_aktif" ? `✅ Akun ini sudah memakai keypass:\n\n*${r.code}*`
+      : `🎬 Keypass NinoNime:\n\n*${r.code}*\n\nBuka NinoNime → Masukkan keypass → tempel kode ini. Hanya berlaku untuk akun dengan email tersebut.`;
     await sock.sendMessage(from, { text: balas });
   } catch (e) {
     await sock.sendMessage(from, { text: "⚠️ Server sedang sibuk. Coba lagi beberapa menit lagi." });
