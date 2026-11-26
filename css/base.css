@@ -171,7 +171,7 @@ body[data-screen="reader"] { background: #0A0A0A; overflow: hidden; }
 #nav { position: fixed; z-index: 20; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); width: min(100% - 28px, 520px); height: 68px; display: flex; padding: 6px;
   --nw: 362px; --nwn: 362; --tw: calc((var(--nw) - 12px) / 4);
   transform: translateX(-50%); transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
-body.nav-off #nav { transform: translate(-50%, calc(100% + 24px + env(safe-area-inset-bottom))); pointer-events: none; }
+body.nav-off #nav, body.kb-open #nav { transform: translate(-50%, calc(100% + 24px + env(safe-area-inset-bottom))); pointer-events: none; }
 .nav-bg { position: absolute; top: 0; bottom: 0; left: 50%; width: 100%; transform: translateX(-50%); border-radius: 34px; pointer-events: none;
   background: var(--glass-bg); backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass); border: 1px solid rgba(255, 255, 255, .13);
   box-shadow: 0 12px 32px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .16); transition: width .5s cubic-bezier(.32, .72, 0, 1); }
@@ -213,7 +213,7 @@ body[data-screen="chat"] .pad-nav { display: none; }
 @keyframes chrise { from { opacity: .4; transform: translateY(10px); } }
 .flt-host { position: fixed; inset: 0; z-index: 40; display: flex; align-items: flex-end; justify-content: center; }
 @keyframes fadeIn { from { opacity: 0; } }
-body.kb-open .pad-nav { height: calc(var(--kb, 0px) + 120px); }
+body.kb-open .pad-nav { height: calc(var(--kb, 0px) + 24px); }
 .mt8 { margin-top: 8px; }
 @keyframes dlPop { from { transform: scale(.4); opacity: 0; } }
 @keyframes dlPulse { 50% { box-shadow: 0 0 0 6px rgba(242, 179, 61, 0); background: rgba(242, 179, 61, .35); } }
@@ -304,3 +304,12 @@ body.short .topbar { padding: 6px 10px; margin-bottom: 8px; }
 @keyframes fbIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes rwSpin { to { transform: rotate(360deg); } }
 @keyframes rwBar { from { left: -40%; } to { left: 100%; } }
+.ask-host { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.ask-host.on .ask-bg { opacity: 1; }
+.ask-host.on .ask { opacity: 1; transform: none; }
+.ask-host.off .ask-bg { opacity: 0; }
+.ask-host.off .ask { opacity: 0; transform: scale(.96); }
+.ask-acts { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+
+body.is-auth #nav { visibility: hidden; }
+body.is-auth .pad-nav { height: 24px; }

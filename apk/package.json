@@ -6,6 +6,7 @@
   "dependencies": {
     "@capacitor/android": "^7.6.0",
     "@capacitor/cli": "^7.6.0",
-    "@capacitor/core": "^7.6.0"
+    "@capacitor/core": "^7.6.0",
+    "@capacitor/keyboard": "^7.0.6"
   }
 }

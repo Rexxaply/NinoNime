@@ -11,7 +11,7 @@ export const lsSet = (k, v) => { try { v == null ? localStorage.removeItem(LS + 
 export class ApiError extends Error { constructor(msg, status = 0) { super(msg); this.status = status; } }
 const NET_MSG = "Tidak ada koneksi internet. Periksa jaringanmu lalu coba lagi.";
 const T = [
-  [/Invalid login credentials/i, "Email atau password salah."],
+  [/Invalid login credentials/i, "Username/email atau password salah."],
   [/Email not confirmed/i, "Email belum dikonfirmasi. Cek kotak masuk (dan folder spam)."],
   [/User already registered/i, "Email ini sudah terdaftar. Silakan masuk."],
   [/Password should be at least/i, "Password minimal 8 karakter."],

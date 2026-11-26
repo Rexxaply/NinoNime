@@ -47,6 +47,7 @@ create table if not exists public.nn_keypass (
   constraint nn_keypass_note check (note is null or char_length(note) <= 80)
 );
 alter table public.nn_keypass add column if not exists reserved_email text;   -- keypass dari bot: khusus email ini
+alter table public.nn_keypass add column if not exists expires_at timestamptz;   -- keypass dari bot: hangus bila belum dipakai sampai waktu ini (30 menit)
 alter table public.nn_keypass add column if not exists wa text;               -- nomor WhatsApp peminta (bot)
 create index if not exists nn_keypass_email_idx on public.nn_keypass (lower(reserved_email)) where reserved_email is not null;
 create index if not exists nn_keypass_wa_idx on public.nn_keypass (wa, created_at desc) where wa is not null;
@@ -107,12 +108,19 @@ begin
   c := 'NK-' || substr(c, 1, 4) || '-' || substr(c, 5, 4) || '-' || substr(c, 9, 4);
   update public.nn_keypass k set user_id = uid, redeemed_at = now()
     where k.code = c and k.user_id is null and not k.revoked
+      and (k.expires_at is null or k.expires_at > now())
       and (k.reserved_email is null or lower(k.reserved_email) = (select lower(u.email) from auth.users u where u.id = uid))
     returning k.code into mine;
   if mine is null then
     insert into public.nn_keypass_tries (user_id) values (uid);
-    return json_build_object('access', false, 'error', case when exists (select 1 from public.nn_keypass where code = c and user_id is null and not revoked)
-      then 'Keypass ini dibuat untuk email akun lain. Masuk dengan email yang kamu kirim ke bot.' else 'Keypass tidak valid atau sudah dipakai akun lain.' end);
+    return json_build_object('access', false, 'error', case
+      when exists (select 1 from public.nn_keypass where code = c and user_id is null and not revoked and expires_at <= now())
+        then 'Keypass sudah hangus (lewat 30 menit). Minta keypass baru lewat bot WhatsApp.'
+      when exists (select 1 from public.nn_keypass where code = c and user_id is null and not revoked)
+        then 'Keypass ini dibuat untuk email akun lain. Masuk dengan email yang kamu kirim ke bot.'
+      when exists (select 1 from public.nn_keypass where code = c and user_id is not null)
+        then 'Keypass ini sudah dipakai.'
+      else 'Keypass tidak valid.' end);
   end if;
   delete from public.nn_keypass_tries where user_id = uid;
   return json_build_object('access', true, 'code', mine);
@@ -423,7 +431,7 @@ declare
   e text := lower(trim(coalesce(p_email, '')));
   w text := nullif(regexp_replace(coalesce(p_wa, ''), '[^0-9]', '', 'g'), '');
   ac text := upper(trim(coalesce(p_activation, '')));
-  uid uuid; c text; n int; st text;
+  uid uuid; c text; n int; st text; wait int;
 begin
   select * into bk from public.nn_bot_keys
     where key_hash = encode(extensions.digest(coalesce(p_key, ''), 'sha256'), 'hex') and not revoked;
@@ -447,25 +455,49 @@ begin
   select code into c from public.nn_keypass where user_id = uid and not revoked;
   if c is not null then st := 'sudah_aktif'; end if;
   if c is null then
-    select code into c from public.nn_keypass where lower(reserved_email) = e and user_id is null and not revoked order by created_at desc limit 1;
-    if c is not null then st := 'sudah_ada'; end if;
+    select code into c from public.nn_keypass where lower(reserved_email) = e and user_id is null and not revoked and (expires_at is null or expires_at > now()) order by created_at desc limit 1;
+    if c is not null then st := 'sudah_ada'; update public.nn_keypass set expires_at = now() + interval '30 minutes' where code = c and expires_at is not null; end if;
   end if;
   if c is null then
     select count(*) into n from public.nn_keypass where wa = w and created_at > now() - interval '24 hours';
-    if n >= 3 then return json_build_object('ok', false, 'error', 'Nomor ini sudah meminta 3 keypass hari ini. Coba lagi besok.'); end if;
+    if n >= 3 then
+      select extract(epoch from (min(t.created_at) + interval '24 hours' - now()))::int into wait
+        from (select created_at from public.nn_keypass where wa = w and created_at > now() - interval '24 hours' order by created_at desc limit 3) t;
+      wait := greatest(coalesce(wait, 60), 60);
+      return json_build_object('ok', false, 'limit', true, 'retry_after', wait,
+        'error', 'Permintaan keypass dari nomor ini sudah mencapai batas (3 per 24 jam). Coba lagi dalam ' ||
+          case when wait >= 3600 then (wait / 3600) || ' jam ' || ((wait % 3600) / 60) || ' menit' else greatest(wait / 60, 1) || ' menit' end || '.');
+    end if;
     select count(*) into n from public.nn_keypass where note = 'bot:' || bk.id and created_at > now() - interval '1 hour';
     if n >= 60 then return json_build_object('ok', false, 'error', 'Bot sedang sibuk. Coba lagi sebentar.'); end if;
     c := public.nn_keypass_new_code();
-    insert into public.nn_keypass (code, note, reserved_email, wa) values (c, 'bot:' || bk.id, e, w);
+    insert into public.nn_keypass (code, note, reserved_email, wa, expires_at) values (c, 'bot:' || bk.id, e, w, now() + interval '30 minutes');
     st := 'baru';
   end if;
   update public.nn_activation set used_at = now(), wa = w where id = act.id;
-  return json_build_object('ok', true, 'status', st, 'code', c);
+  return json_build_object('ok', true, 'status', st, 'code', c, 'expires_in', case when st = 'sudah_aktif' then null else 1800 end);
 end;
 $$;
 revoke all on function public.nn_bot_keypass(text, text, text, text) from public;
 grant execute on function public.nn_bot_keypass(text, text, text, text) to anon, authenticated;
 
 grant all on public.nn_keypass, public.nn_keypass_tries, public.nn_bot_keys, public.nn_admins, public.nn_activation, public.nn_profiles to service_role;
+
+-- Masuk dengan username: mengembalikan email milik username (hanya yang sudah diklaim pemiliknya)
+create or replace function public.nn_login_email(p_username text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare u text := lower(trim(coalesce(p_username, ''))); e text;
+begin
+  if u !~ '^[a-z][a-z0-9_.]{2,19}$' then return json_build_object('email', null); end if;
+  select a.email into e from public.nn_profiles p join auth.users a on a.id = p.user_id where lower(p.username) = u;
+  return json_build_object('email', e);
+end;
+$$;
+revoke all on function public.nn_login_email(text) from public;
+grant execute on function public.nn_login_email(text) to anon, authenticated;
 
 commit;
