@@ -167,9 +167,10 @@ function authPage() {
     setTimeout(() => { btn.disabled = false; }, 30000);
   });
 
+  const setSide = (up) => { flipUp = up; authMode = up ? "up" : "in"; flip.classList.toggle("is-up", up); sync(); go2(up); };
   setActs({
     eye: (el) => eye(el),
-    flip: () => { flipUp = !flipUp; authMode = flipUp ? "up" : "in"; flip.classList.toggle("is-up", flipUp); sync(); go2(flipUp); },
+    flip: () => setSide(!flipUp),
     terms: (_el, e) => { e?.preventDefault?.(); ask(TERMS, { title: "Ketentuan & Privasi", ok: "Mengerti", cancel: "Tutup" }); },
     forgot: (el) => {
       const open = fg.hidden; fg.hidden = !open; el.setAttribute("aria-expanded", String(open));
@@ -197,7 +198,13 @@ function authPage() {
         const rv = await api.rpc("nn_reserve_username", { p_username: username, p_email: email.toLowerCase() });
         if (!rv?.ok) { uOk = false; setHint("username", rv?.error || "Username sudah dipakai", "bad"); throw new Error(rv?.error || "Username sudah dipakai. Coba yang lain."); }
         const r = await api.signUp(email, pw, username);
-        if (r.confirm) { toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500); flipUp = false; authMode = "in"; authPage(); return; }
+        if (r.confirm) {   // tanpa menggambar ulang halaman: kartu berbalik mulus kembali ke Masuk, email terisi
+          toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500);
+          faceOf(false).elements.email.value = email; faceOf(false).elements.pw.value = "";
+          btn.disabled = false; setSide(false);
+          setTimeout(() => { form.reset(); setHint("username", "", ""); setHint("email", "", ""); checkPw(); uOk = null; }, 800);   // dikosongkan setelah kartu selesai berbalik
+          return;
+        }
       } else await api.signIn(email, pw);
       api.rpc("nn_claim_username").then((r) => { if (r?.username) api.lsSet("username", r.username); }).catch(() => {});
       await AN.loadAccess().catch(() => {});
