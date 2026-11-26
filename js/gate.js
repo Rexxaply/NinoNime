@@ -21,7 +21,6 @@ export function gate() {
       <label class="kp-f">${icon("key", 18, 2)}<input name="kp" maxlength="17" inputmode="text" spellcheck="false" autocapitalize="characters" autocomplete="off" placeholder="NK-XXXX-XXXX-XXXX" aria-label="Keypass"></label>
       <span class="kg-msg" role="alert" aria-live="polite"></span>
       <button class="kp-wa" type="button" data-act="wa">${icon("wa", 16, 2)}Belum mempunyai keypass</button>
-      <span class="kp-hint">Bot WhatsApp mengirim keypass untuk email <b>${esc(api.currentUser()?.email || "")}</b>. Tinggal tekan kirim di WhatsApp, lalu salin kodenya ke sini (berlaku 30 menit).</span>
     </form></div>`;
   const form = $(".kg-card", view), inp = $("input", form), msg = $(".kg-msg", form);
   let busy = false;
