@@ -189,7 +189,8 @@ function authPage() {
     const em = fEmail.value.trim(), btn = form.querySelector(".p-forgot button[type=submit]");
     if (!validEmail(em)) { fgMsg.dataset.k = "bad"; fgMsg.textContent = "Isi email yang formatnya benar."; return; }
     btn.disabled = true; fgMsg.dataset.k = ""; fgMsg.textContent = "Mengirim…";
-    try { await api.recover(em); fgMsg.dataset.k = "ok"; fgMsg.textContent = "Jika email itu terdaftar, tautan reset sudah dikirim. Cek kotak masuk dan folder spam."; }
+    try { await api.recover(em); fgMsg.dataset.k = "ok"; fgMsg.textContent = "Jika email itu terdaftar, tautan reset sudah dikirim. Cek kotak masuk dan folder spam.";
+      await ask(`Jika ${em} terdaftar, tautan reset password sudah dikirim. Buka emailmu (cek juga folder spam) lalu tekan tautannya: kamu akan diarahkan ke halaman reset password Ninokuu. Setelah password baru tersimpan, kembali ke NinoNime dan masuk.`, { title: "Tautan reset terkirim", ok: "Mengerti", cancel: "" }); }
     catch (ex) { fgMsg.dataset.k = "bad"; fgMsg.textContent = ex.message; }
     setTimeout(() => { btn.disabled = false; }, 30000);
   };
@@ -224,10 +225,11 @@ function authPage() {
         const rv = await api.rpc("nn_reserve_username", { p_username: username, p_email: email.toLowerCase() });
         if (!rv?.ok) { uOk = false; setHint("username", rv?.error || "Username sudah dipakai", "bad"); throw new Error(rv?.error || "Username sudah dipakai. Coba yang lain."); }
         const r = await api.signUp(email, pw, username);
-        if (r.confirm) {   // tanpa menggambar ulang halaman: kartu berbalik mulus kembali ke Masuk, email terisi
-          toast("Cek email untuk konfirmasi akun, lalu masuk.", 4500);
+        if (r.confirm) {   // pop-up info dulu, lalu kartu berbalik mulus kembali ke Masuk (tanpa render ulang), email terisi
           faceOf(false).elements.email.value = email; faceOf(false).elements.pw.value = "";
-          btn.disabled = false; setSide(false);
+          btn.disabled = false;
+          await ask(`Kami mengirim tautan konfirmasi ke ${email}. Lihat di kotak masuk, atau cek folder spam kalau belum ada. Setelah dikonfirmasi, kembali ke sini lalu masuk.`, { title: "Email berhasil dikirim", ok: "Mengerti", cancel: "" });
+          setSide(false);
           setTimeout(() => { form.reset(); setHint("username", "", ""); setHint("email", "", ""); checkPw(); uOk = null; }, 800);   // dikosongkan setelah kartu selesai berbalik
           return;
         }
