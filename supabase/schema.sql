@@ -501,3 +501,84 @@ revoke all on function public.nn_login_email(text) from public;
 grant execute on function public.nn_login_email(text) to anon, authenticated;
 
 commit;
+
+-- ===== hapus / lepas keypass =====
+alter table public.nn_keypass add column if not exists released_at timestamptz;   -- dilepas sendiri oleh pemiliknya
+
+-- pengguna melepas keypass miliknya: akses hilang, keypass tidak bisa dipakai lagi (tetap tercatat untuk batas bot)
+create or replace function public.nn_release_keypass()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  if auth.uid() is null then return json_build_object('ok', false, 'error', 'Masuk dulu.'); end if;
+  update public.nn_keypass set revoked = true, released_at = now() where user_id = auth.uid() and not revoked;
+  get diagnostics n = row_count;
+  if n = 0 then return json_build_object('ok', false, 'error', 'Akun ini belum memakai keypass.'); end if;
+  return json_build_object('ok', true);
+end;
+$$;
+revoke all on function public.nn_release_keypass() from public, anon;
+grant execute on function public.nn_release_keypass() to authenticated;
+
+-- admin: hapus satu keypass yang tidak sedang dipakai (belum dipakai, kedaluwarsa, dicabut, atau dilepas)
+create or replace function public.nn_delete_keypass(p_code text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  if not public.nn_is_admin() then raise exception 'Khusus admin.'; end if;
+  delete from public.nn_keypass where code = p_code and (user_id is null or revoked);
+  get diagnostics n = row_count;
+  if n = 0 then return json_build_object('ok', false, 'error', 'Keypass ini sedang dipakai. Cabut dulu sebelum menghapus.'); end if;
+  return json_build_object('ok', true);
+end;
+$$;
+revoke all on function public.nn_delete_keypass(text) from public, anon;
+grant execute on function public.nn_delete_keypass(text) to authenticated;
+
+-- admin: hapus semua keypass yang belum pernah dipakai (termasuk yang kedaluwarsa)
+create or replace function public.nn_delete_unused_keypass()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare n int;
+begin
+  if not public.nn_is_admin() then raise exception 'Khusus admin.'; end if;
+  delete from public.nn_keypass where user_id is null and redeemed_at is null;
+  get diagnostics n = row_count;
+  return json_build_object('ok', true, 'deleted', n);
+end;
+$$;
+revoke all on function public.nn_delete_unused_keypass() from public, anon;
+grant execute on function public.nn_delete_unused_keypass() to authenticated;
+
+-- daftar keypass untuk panel developer: + status kedaluwarsa & dilepas
+drop function if exists public.nn_keypass_list2(int);
+create or replace function public.nn_keypass_list2(p_limit int default 200)
+returns table (code text, note text, created_at timestamptz, redeemed_at timestamptz, revoked boolean, email text, reserved_email text, wa text, expires_at timestamptz, released_at timestamptz)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.nn_is_admin() then raise exception 'Khusus admin.'; end if;
+  return query
+    select k.code, k.note, k.created_at, k.redeemed_at, k.revoked, u.email::text, k.reserved_email, k.wa, k.expires_at, k.released_at
+    from public.nn_keypass k
+    left join auth.users u on u.id = k.user_id
+    order by k.created_at desc
+    limit least(greatest(coalesce(p_limit, 200), 1), 500);
+end;
+$$;
+revoke all on function public.nn_keypass_list2(int) from public, anon;
+grant execute on function public.nn_keypass_list2(int) to authenticated;
