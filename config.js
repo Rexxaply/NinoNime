@@ -1,11 +1,11 @@
 // Isi dengan proyek Supabase milikmu (Project Settings → API).
 // Hanya kunci publik (anon / publishable). JANGAN pernah menaruh kunci service_role di sini.
 window.NINONIME_CONFIG = {
-  SUPABASE_URL: "https://ocersqyrztzegwzjvvoh.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jZXJzcXlyenR6ZWd3emp2dm9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ2MzEyNjgsImV4cCI6MjExMDIwNzI2OH0.X7LbJUQ375iCEpypD-HHsXuopbfOOf9oc-kD5leR-lY",
+  SUPABASE_URL: "https://panel.ninokuu.site",
+  SUPABASE_ANON_KEY: "sb_publishable_uXYQxNec4Lp46GcWlm2phf_5vK4c5pC",
   // Server cadangan (Supabase Cloud): dipakai otomatis bila SUPABASE_URL (server sendiri) mati. Kosongkan bila tidak dipakai.
-  FALLBACK_URL: "",
-  FALLBACK_KEY: "",
+  FALLBACK_URL: "https://ocersqyrztzegwzjvvoh.supabase.co",
+  FALLBACK_KEY: "sb_publishable_RsXtbJpTDEISJ-q6pKeXdg_oiYaVQa9",
   VERSION: "0.1.0",
   // Isi "ninokuu:session" bila NinoNime satu alamat situs dengan Ninokuu (sekali login untuk keduanya).
   // Biarkan kosong bila beda domain: login terpisah, akun tetap sama.
