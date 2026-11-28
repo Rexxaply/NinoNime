@@ -1,0 +1,98 @@
+# Membangun APK NinoNime DEV (Capacitor) dari cabang dev — untuk mencoba versi APK tanpa menyentuh main.
+# Jalan otomatis tiap push ke dev yang mengubah berkas aplikasi, atau manual dari tab Actions → "Build APK Dev" → Run workflow
+# (atau `gh workflow run apk-dev.yml --ref dev`). Jadi cukup suruh AI commit & push ke dev, APK Dev ikut terbangun.
+# APK Dev terpasang BERDAMPINGAN dengan versi rilis: ID aplikasi com.ninonime.dev, nama "NinoNime Dev".
+# Hasil: GitHub Release pra-rilis "apk-dev" berisi ninonime-dev.apk (tautan tetap):
+#   https://github.com/<pemilik>/<repo>/releases/download/apk-dev/ninonime-dev.apk
+# Kunci tanda tangan sama dengan rilis (secret ANDROID_KEYSTORE_B64) → APK Dev bisa diperbarui tanpa hapus-pasang.
+name: Build APK Dev
+on:
+  push:
+    branches: [dev]
+    paths: ["VERSION", "apk/**", "index.html", "config.js", "manifest.webmanifest", "sw.js", "css/**", "js/**", "icons/**", ".github/workflows/apk-dev.yml"]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: apk-dev
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: apk
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false, ref: dev }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+
+      - name: Nomor versi
+        working-directory: .
+        run: |
+          BASE="$(cut -d. -f1,2 VERSION)"
+          echo "VER=$BASE.$GITHUB_RUN_NUMBER-dev" >> "$GITHUB_ENV"
+
+      - name: Berkas web
+        working-directory: .
+        run: |
+          mkdir -p apk/www
+          cp -r index.html config.js manifest.webmanifest sw.js css js icons apk/www/
+          sed -i "s/VERSION: \"[^\"]*\"/VERSION: \"$VER\"/" apk/www/config.js
+          mkdir -p apk/assets
+          cp icons/icon-512.png apk/assets/icon-only.png
+          cp icons/icon-512.png apk/assets/icon-foreground.png
+          cp icons/icon-512.png apk/assets/icon-background.png
+
+      - name: Pasang Capacitor dan proyek Android
+        run: |
+          # ID & nama aplikasi Dev (terpasang berdampingan dengan versi rilis)
+          node -e "const fs=require('fs');const f='capacitor.config.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.appId='com.ninonime.dev';c.appName='NinoNime Dev';fs.writeFileSync(f,JSON.stringify(c,null,2))"
+          npm install --no-audit --no-fund
+          npx cap add android
+          node native/patch-android.mjs com.ninonime.dev
+          # layar menyusut saat keyboard muncul (kolom isian tidak tertutup keyboard), sama seperti Ninokuu
+          node -e "const fs=require('fs');const f='android/app/src/main/AndroidManifest.xml';let m=fs.readFileSync(f,'utf8');if(!m.includes('windowSoftInputMode'))m=m.replace(/<activity\\b/,'<activity\\n            android:windowSoftInputMode=\"adjustResize\"');fs.writeFileSync(f,m)"
+          npx cap sync android
+
+      - name: Ikon aplikasi (opsional)
+        continue-on-error: true
+        run: npx --yes @capacitor/assets generate --android --iconBackgroundColor '#0B1018' --iconBackgroundColorDark '#0B1018'
+
+      - name: Kunci tanda tangan tetap
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Memakai kunci tetap dari secret."
+          else
+            echo "::warning::Secret ANDROID_KEYSTORE_B64 belum diisi: APK ini TIDAK bisa menimpa versi sebelumnya."
+          fi
+
+      - name: Bangun APK
+        working-directory: apk/android
+        run: |
+          sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/; s/versionName \"1.0\"/versionName \"$VER\"/" app/build.gradle
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Ganti nama berkas
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ninonime-dev.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ninonime-dev-apk
+          path: apk/ninonime-dev.apk
+
+      - name: Pra-rilis "apk-dev"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete apk-dev --yes --cleanup-tag 2>/dev/null || true
+          NOTE="Dev v$VER dari cabang dev: $(git log -1 --pretty=%s)"
+          gh release create apk-dev ninonime-dev.apk --prerelease --target dev --title "NinoNime Dev v$VER" --notes "$NOTE"

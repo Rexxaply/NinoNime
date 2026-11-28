@@ -54,6 +54,7 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npx cap add android
+          node native/patch-android.mjs com.ninonime.app   # melayang di luar aplikasi (PiP Android)
           # layar menyusut saat keyboard muncul (kolom isian tidak tertutup keyboard), sama seperti Ninokuu
           node -e "const fs=require('fs');const f='android/app/src/main/AndroidManifest.xml';let m=fs.readFileSync(f,'utf8');if(!m.includes('windowSoftInputMode'))m=m.replace(/<activity\\b/,'<activity\\n            android:windowSoftInputMode=\"adjustResize\"');fs.writeFileSync(f,m)"
           npx cap sync android
