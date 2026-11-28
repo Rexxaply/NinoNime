@@ -85,14 +85,21 @@ public class MainActivity extends BridgeActivity {
 }
 `);
 
-// 2b) tema: latar jendela sewarna aplikasi sejak awal (juga sebelum MainActivity memasangnya)
+// 2b) tema (sama dengan Ninokuu): latar jendela & bilah status/navigasi sewarna aplikasi, dan KELUAR dari
+// edge-to-edge paksa Android 15. Tanpa itu Capacitor menyisakan jarak setinggi bilah navigasi di bawah halaman
+// walau keyboard sudah menutupinya → kotak kosong di atas keyboard (kartu login terpotong).
 const st = "android/app/src/main/res/values/styles.xml";
 if (fs.existsSync(st)) {
   let x = fs.readFileSync(st, "utf8");
-  x = x.replace(/(<style name="AppTheme\.NoActionBar"[^>]*>)/, (all) => x.includes("nn-bg") ? all : `${all}\n        <!-- nn-bg --><item name="android:windowBackground">@color/nn_bg</item>`);
+  const items = ["statusBarColor", "navigationBarColor", "windowBackground"].map((k) => `<item name="android:${k}">@color/nn_bg</item>`)
+    .concat(['<item name="android:windowLightStatusBar">false</item>', '<item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>'])
+    .map((i) => `\n        ${i}`).join("");
+  if (!x.includes("nn-bg")) {
+    x = x.replace(/(<style name="AppTheme\.NoActionBar"[^>]*>)/, `$1\n        <!-- nn-bg -->${items}`);
+    x = x.replace(/(<style name="AppTheme\.NoActionBarLaunch"[^>]*>)/, `$1\n        <!-- nn-bg -->${items}`);
+  }
   fs.writeFileSync(st, x);
-  const cf = "android/app/src/main/res/values/nn_colors.xml";
-  fs.writeFileSync(cf, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="nn_bg">#0B1018</color>\n</resources>\n`);
+  fs.writeFileSync("android/app/src/main/res/values/nn_colors.xml", `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="nn_bg">#0B1018</color>\n</resources>\n`);
 }
 
 // 3) plugin
