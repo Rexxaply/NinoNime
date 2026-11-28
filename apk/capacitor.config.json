@@ -3,7 +3,21 @@
   "appName": "NinoNime",
   "webDir": "www",
   "backgroundColor": "#0B1018",
-  "server": { "androidScheme": "https" },
-  "android": { "allowMixedContent": false, "adjustMarginsForEdgeToEdge": "auto", "backgroundColor": "#0B1018" },
-  "plugins": { "CapacitorHttp": { "enabled": false }, "Keyboard": { "resizeOnFullScreen": true } }
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "adjustMarginsForEdgeToEdge": "auto",
+    "backgroundColor": "#0B1018"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": false
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
+    }
+  }
 }
