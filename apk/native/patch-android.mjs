@@ -26,6 +26,7 @@ fs.writeFileSync(path.join(pkgDir, "MainActivity.java"), `package ${appId};
 
 import android.app.PictureInPictureParams;
 import android.content.res.Configuration;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
@@ -38,6 +39,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NinoPipPlugin.class);
         super.onCreate(savedInstanceState);
+        // latar jendela = warna aplikasi. Bawaan tema gelap Android abu-abu (#303030): saat keyboard muncul, layar
+        // sudah menyusut sebelum keyboard selesai naik → celah itu dulu tampak sebagai bilah abu-abu di atas keyboard.
+        getWindow().setBackgroundDrawable(new ColorDrawable(0xFF0B1018));
     }
 
     // dipanggil plugin: video sedang diputar (dan sakelar "Melayang di luar aplikasi" aktif)
@@ -80,6 +84,16 @@ public class MainActivity extends BridgeActivity {
     }
 }
 `);
+
+// 2b) tema: latar jendela sewarna aplikasi sejak awal (juga sebelum MainActivity memasangnya)
+const st = "android/app/src/main/res/values/styles.xml";
+if (fs.existsSync(st)) {
+  let x = fs.readFileSync(st, "utf8");
+  x = x.replace(/(<style name="AppTheme\.NoActionBar"[^>]*>)/, (all) => x.includes("nn-bg") ? all : `${all}\n        <!-- nn-bg --><item name="android:windowBackground">@color/nn_bg</item>`);
+  fs.writeFileSync(st, x);
+  const cf = "android/app/src/main/res/values/nn_colors.xml";
+  fs.writeFileSync(cf, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="nn_bg">#0B1018</color>\n</resources>\n`);
+}
 
 // 3) plugin
 fs.writeFileSync(path.join(pkgDir, "NinoPipPlugin.java"), `package ${appId};
