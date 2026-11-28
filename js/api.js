@@ -88,9 +88,12 @@ async function failover(status) {
   return true;
 }
 // satu pintu semua permintaan: build(token) membuat init fetch (dipanggil ulang setelah pindah server)
+// token login milik server lain / rusak → server menjawab 401 (PostgREST: PGRST301 "No suitable key or wrong key type")
+const badToken = async (r) => { try { return /PGRST30[123]|JWT|key type|invalid_token|bad_jwt/i.test(JSON.stringify(await r.clone().json())); } catch { return false; } };
 async function net(path, build, { auth = true, failover: fo = true } = {}) {
   if (!configured) throw new ApiError("Aplikasi belum tersambung ke server (isi config.js).");
-  for (let i = 0; i < 2; i++) {
+  let reauth = false, moved = false;
+  for (let i = 0; i < 3; i++) {
     const t = auth ? await accessToken() : null;
     const init = build(t);
     // kunci baru (sb_publishable_) bukan JWT: cukup di header apikey, jangan dikirim sebagai Bearer
@@ -98,8 +101,10 @@ async function net(path, build, { auth = true, failover: fo = true } = {}) {
     init.headers = { apikey: KEY, ...bearer, ...(init.headers || {}) };
     let r = null;
     try { r = await fetch(BASE + path, init); } catch {}
+    // token ditolak: coba perbarui; refresh token juga ditolak → sesi dihapus (masuk lagi), permintaan diulang tanpa login
+    if (r && r.status === 401 && auth && t && !reauth && await badToken(r)) { reauth = true; forceRefresh = true; await accessToken(); continue; }
     if (r && !DOWN(r.status)) return r;
-    if (i === 0 && fo && await failover(r ? r.status : 0)) continue;
+    if (!moved && fo) { moved = true; if (await failover(r ? r.status : 0)) continue; }
     if (r) return r;
     throw new ApiError(NET_MSG);
   }
@@ -112,11 +117,12 @@ async function authCall(path, body, { method = "POST", token } = {}) {
   if (!r.ok) throw await readErr(r);
   return r.status === 204 ? null : r.json().catch(() => null);
 }
-let refreshing = null;
+let refreshing = null, forceRefresh = false;   // forceRefresh: token ditolak server → perbarui walau belum kedaluwarsa
 async function accessToken() {
   syncSess();
   if (!session) return null;
-  if (session.expires_at * 1000 - Date.now() > 60e3) return session.access_token;
+  if (!forceRefresh && session.expires_at * 1000 - Date.now() > 60e3) return session.access_token;
+  forceRefresh = false;
   refreshing ||= authCall("/token?grant_type=refresh_token", { refresh_token: session.refresh_token })
     .then((s) => { setSession(s); return s.access_token; })
     .catch((e) => { if (e.status === 400 || e.status === 401) setSession(null); return null; })
