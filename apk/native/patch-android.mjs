@@ -32,6 +32,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Icon;
 import android.os.Build;
@@ -45,6 +46,7 @@ public class MainActivity extends BridgeActivity {
     private volatile boolean playing = false, paused = true, hasNext = false;
     private static final String PIP_ACTION = "${appId}.PIP_ACTION";
     private BroadcastReceiver pipRx;
+    private volatile Rect hint = null;   // posisi video di layar → animasi masuk jendela melayang dari video itu
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -82,6 +84,18 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(this::applyParams);
     }
 
+    // dipanggil plugin: posisi video (piksel CSS dari halaman web) → piksel layar
+    public void setHint(double x, double y, double w, double h, double dpr) {
+        runOnUiThread(() -> {
+            if (w <= 0 || h <= 0) { hint = null; applyParams(); return; }
+            int[] loc = new int[2];
+            try { getBridge().getWebView().getLocationInWindow(loc); } catch (Exception ignored) { }
+            hint = new Rect((int) Math.round(x * dpr) + loc[0], (int) Math.round(y * dpr) + loc[1],
+                (int) Math.round((x + w) * dpr) + loc[0], (int) Math.round((y + h) * dpr) + loc[1]);
+            applyParams();
+        });
+    }
+
     private RemoteAction action(int icon, String title, String cmd, int req) {
         Intent i = new Intent(PIP_ACTION).setPackage(getPackageName()).putExtra("cmd", cmd);
         PendingIntent pi = PendingIntent.getBroadcast(this, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -107,6 +121,7 @@ public class MainActivity extends BridgeActivity {
 
     private PictureInPictureParams params() {
         PictureInPictureParams.Builder b = new PictureInPictureParams.Builder().setAspectRatio(new Rational(16, 9)).setActions(actions());
+        if (hint != null) b.setSourceRectHint(hint);
         // video: ubah ukuran TANPA "seamless" (anjuran Android untuk video) → ketuk 2x untuk memperbesar tidak lagi
         // menampilkan gambar lama di pojok kotak hitam selama halaman web menyesuaikan ukuran
         if (Build.VERSION.SDK_INT >= 31) b.setAutoEnterEnabled(playing).setSeamlessResizeEnabled(false);
@@ -162,6 +177,12 @@ public class NinoPipPlugin extends Plugin {
     @PluginMethod
     public void setMedia(PluginCall call) {
         ((MainActivity) getActivity()).setMedia(Boolean.TRUE.equals(call.getBoolean("paused", true)), Boolean.TRUE.equals(call.getBoolean("hasNext", false)));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setHint(PluginCall call) {
+        ((MainActivity) getActivity()).setHint(call.getDouble("x", 0.0), call.getDouble("y", 0.0), call.getDouble("w", 0.0), call.getDouble("h", 0.0), call.getDouble("dpr", 1.0));
         call.resolve();
     }
 
