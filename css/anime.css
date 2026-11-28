@@ -453,7 +453,9 @@ body[data-mode="anime"] #nav a { font-size: 10.5px; }
 
 /* ===== Jadwal satu minggu bergulir ===== */
 .jd-sec { scroll-margin-top: 120px; }
-.jd-sh { position: sticky; top: calc(var(--sat) + 96px); z-index: 4; display: flex; align-items: baseline; gap: 8px; padding: 14px 18px 8px; margin-top: 6px;
+/* hari terakhir cukup tinggi supaya bisa digulir sampai menempel di bawah bilah tanggal (ketuk Sabtu / buka hari Sabtu) */
+.jd-sec:last-child { min-height: calc(100vh - var(--jdb, 140px) - 110px - env(safe-area-inset-bottom)); }
+.jd-sh { position: sticky; top: calc(var(--jdb, calc(var(--sat) + 84px)) - 1px); z-index: 4; display: flex; align-items: baseline; gap: 8px; padding: 14px 18px 8px; margin-top: 6px;
   background: linear-gradient(var(--bg) 78%, rgba(11, 16, 24, 0)); }
 .jd-sh b { font: 400 26px/1 var(--serif); }
 .jd-sec.is-today .jd-sh b { color: var(--gold); }
@@ -463,6 +465,9 @@ body[data-mode="anime"] #nav a { font-size: 10.5px; }
 .jd-today { position: fixed; z-index: 8; left: 50%; bottom: calc(14px + 68px + 18px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px;
   padding: 10px 16px; border-radius: 999px; background: var(--red); color: #fff; font-size: 13.5px; font-weight: 800; box-shadow: 0 10px 26px rgba(224, 36, 43, .45); animation: anIn .3s ease-out both; }
 .jd-today[hidden] { display: none; }
+body.ap-mini .jd-today { bottom: calc(14px + 68px + 10px + 70px + 12px + env(safe-area-inset-bottom)); }
+body.short .jd-today { bottom: calc(8px + 52px + 16px + env(safe-area-inset-bottom)); }
+body.short.ap-mini .jd-today { bottom: calc(8px + 52px + 8px + 70px + 12px + env(safe-area-inset-bottom)); }
 .jd-today svg { transform: rotate(-90deg); transition: transform .25s; }
 .jd-today.up svg { transform: rotate(90deg); }
 .jd-today:active { scale: .96; }
