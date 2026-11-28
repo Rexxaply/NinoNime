@@ -139,6 +139,11 @@ addEventListener("keydown", (e) => { if (e.key === "Escape" && (AN.closeKeypass(
 }
 
 api.onAuth((s) => { if (!s) render(); });
+// server utama mati → pindah otomatis ke cadangan (sesi login terpisah per server); pulih → kembali
+window.addEventListener("ninonime:backend", (ev) => {
+  toast(ev.detail?.backup ? (api.currentUser() ? "Server utama sedang gangguan, memakai server cadangan." : "Server utama sedang gangguan, memakai server cadangan. Masuk lagi bila diminta.") : "Server utama pulih.", ev.detail?.backup ? 5000 : 3000);
+  render();
+});
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 render();
 // akses dicek ulang ke server tiap aplikasi dibuka (keypass bisa dicabut admin)
