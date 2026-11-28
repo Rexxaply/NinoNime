@@ -35,7 +35,7 @@
   label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--mu); }
   input { min-height: 52px; padding: 0 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--s1); color: var(--tx); font: inherit; font-size: 16px; }
   input:focus { outline: 2px solid var(--red); outline-offset: 1px; }
-  .show { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--mu); }
+  .show { display: flex; flex-direction: row; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--mu); }
   .show input { min-height: 0; width: 18px; height: 18px; accent-color: var(--red); }
   .err-t { min-height: 18px; color: #ff6b70; font-size: 13px; font-weight: 600; }
   button.btn { border: 0; font-family: inherit; cursor: pointer; }
@@ -53,7 +53,7 @@
   <p id="msg">Masukkan password baru untuk akun NinoNime-mu.</p>
   <form id="f" hidden novalidate>
     <label>Password baru<input id="pw" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Minimal 8 karakter" required></label>
-    <label>Ulangi password baru<input id="pw2" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+    <label>Ulangi password baru<input id="pw2" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Ketik ulang password" required></label>
     <label class="show"><input type="checkbox" id="sh">Tampilkan password</label>
     <span class="err-t" id="e" role="alert"></span>
     <button class="btn" id="save" type="submit" style="margin-top:4px">Simpan password</button>
