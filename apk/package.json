@@ -5,6 +5,7 @@
   "description": "Pembungkus Android (Capacitor) untuk NinoNime. Dibangun oleh workflow Build APK.",
   "dependencies": {
     "@capacitor/android": "^7.6.0",
+    "@capacitor/app": "^7.1.0",
     "@capacitor/cli": "^7.6.0",
     "@capacitor/core": "^7.6.0",
     "@capacitor/keyboard": "^7.0.6"

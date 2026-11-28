@@ -53,6 +53,14 @@ jobs:
       - name: Pasang Capacitor dan proyek Android
         run: |
           npm install --no-audit --no-fund
+          # JavaScript Capacitor + plugin (App: tombol kembali, Keyboard) disisipkan ke index.html APK, seperti Ninokuu.
+          # Tanpa ini window.Capacitor.Plugins kosong: tombol kembali langsung menutup aplikasi, plugin buatan sendiri tidak terpanggil.
+          cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
+          cp node_modules/@capacitor/app/dist/plugin.js www/cap-app.js
+          cp node_modules/@capacitor/keyboard/dist/plugin.js www/cap-kb.js
+          grep -q "capacitorExports" www/capacitor.js && grep -q "registerPlugin" www/cap-app.js && grep -q "registerPlugin" www/cap-kb.js
+          sed -i 's#<script src="config.js"></script>#<script src="capacitor.js"></script>\n<script src="cap-app.js"></script>\n<script src="cap-kb.js"></script>\n<script src="config.js"></script>#' www/index.html
+          [ "$(grep -c 'src="cap' www/index.html)" = "3" ] || { echo "::error::Gagal menyisipkan skrip Capacitor ke index.html"; exit 1; }
           npx cap add android
           node native/patch-android.mjs com.ninonime.app   # melayang di luar aplikasi (PiP Android)
           # layar menyusut saat keyboard muncul (kolom isian tidak tertutup keyboard), sama seperti Ninokuu
